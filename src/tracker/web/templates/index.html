@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fundamentals Tracker</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="viz-root">
+  <header class="topbar">
+    <h1>Fundamentals Tracker</h1>
+    <div class="ticker-select" id="ticker-select">
+      {% for t in universe %}
+        <button class="ticker-btn" data-ticker="{{ t }}">{{ t }}</button>
+      {% endfor %}
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="panel panel-fundamentals">
+      <h2>Fundamentals</h2>
+      <div id="fundamentals-table"></div>
+    </section>
+
+    <section class="panel panel-price">
+      <h2>Price <span class="muted" id="valuation-summary"></span></h2>
+      <div id="price-chart"></div>
+    </section>
+
+    <section class="panel panel-capex">
+      <h2>Capex Cycle — company vs. national capex investment</h2>
+      <div class="capex-grid">
+        <div id="capex-intensity-chart"></div>
+        <div id="capex-cycle-chart"></div>
+      </div>
+      <div id="capex-scatter-chart"></div>
+    </section>
+
+    <section class="panel panel-compare">
+      <h2>Cross-company compare</h2>
+      <div class="compare-controls">
+        <select id="compare-metric">
+          <option value="revenue">Revenue</option>
+          <option value="gross_margin">Gross margin</option>
+          <option value="operating_margin">Operating margin</option>
+          <option value="net_income">Net income</option>
+          <option value="free_cash_flow">Free cash flow</option>
+        </select>
+        <select id="compare-year"></select>
+      </div>
+      <div id="compare-chart"></div>
+    </section>
+
+    <section class="panel panel-qa">
+      <h2>Ask the tracker</h2>
+      <form id="qa-form">
+        <input type="text" id="qa-question" placeholder="e.g. How did MSFT's revenue grow last year, and what did management attribute it to?" autocomplete="off">
+        <button type="submit">Ask</button>
+      </form>
+      <div id="qa-answer"></div>
+      <details id="qa-trace-wrap" hidden>
+        <summary>Tool-call trace</summary>
+        <pre id="qa-trace"></pre>
+      </details>
+    </section>
+  </main>
+</div>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

@@ -16,8 +16,13 @@ docker compose up
 
 Open **http://localhost:8000**. Postgres and the seed snapshot committed at `data/seed/*.csv.gz`
 auto-load on first boot — the dashboard and Q&A layer work with **zero live network dependency**
-for SEC/Yahoo/FRED. The only outbound call at request time is the Q&A panel's call to the
+for SEC/Yahoo/FRED. The only outbound call at request time is the chat rail's call to the
 Anthropic API.
+
+The dashboard is two columns: a collapsible chat rail on the left, and the charts and tables on
+the right. Every chart and table is its own card with a hover toolbar — **copy** (chart to the
+clipboard as a PNG, table as a pasteable grid), **download** (PNG/JPEG for charts, `.xlsx` with
+typed numeric cells for tables) and **fullscreen**.
 
 To re-run **live** ingestion against the real sources (proves the wiring is real, not just the
 seed):
@@ -63,14 +68,14 @@ Select a ticker (e.g. `MSFT`) from the top button row. The fundamentals table sh
 fiscal years of revenue, net income, diluted EPS, gross margin, operating margin, and free cash
 flow, each with a color-coded YoY delta (green ▲ / red ▼); a large-swing delta (e.g. an
 EPS jump around a stock split) is additionally flagged with a "⚠" hover tooltip rather than
-shown as a plain, misleading percentage. The price chart below plots ~3 years of daily closes
+shown as a plain, misleading percentage. The price card plots ~3 years of daily closes
 with dotted vertical markers at each fiscal-year-end date, so the price series lines up visually
 with the reported periods.
 
-**2. The "own metric" panel — Capex Cycle**
+**2. The "own metric" — Capex Cycle**
 
-The Capex Cycle panel shows, per company: capex intensity (capex ÷ revenue) as a bar chart by
-fiscal year, a line chart of that company's capex YoY growth against the national capex cycle
+Three cards cover the capex story, per company: capex intensity (capex ÷ revenue) as a bar chart
+by fiscal year, a line chart of that company's capex YoY growth against the national capex cycle
 (FRED's Private Nonresidential Fixed Investment YoY growth), and a five-company scatter of latest
 capex intensity vs. revenue growth. See `DESIGN.md` for what this is meant to tell an investor.
 
@@ -85,8 +90,10 @@ capex intensity vs. revenue growth. See `DESIGN.md` for what this is meant to te
 > More Personal Computing declined on Xbox/gaming weakness, partly offset by Search advertising
 > growth. (MSFT FY2026 10-K, Item 7 MD&A, accession `0001193125-26-323660`.)
 
-The trace panel under the answer shows both tools fired: `get_fundamentals` (the number) and
+The tool-call trace under that answer shows both tools fired: `get_fundamentals` (the number) and
 `search_filings` (the MD&A narrative), each with the raw tool result — the grounding audit trail.
+The chat is multi-turn: the transcript is posted back with each question, so "and for NVDA?"
+resolves against the previous answer.
 
 **4. Q&A — out-of-scope, declined rather than invented**
 

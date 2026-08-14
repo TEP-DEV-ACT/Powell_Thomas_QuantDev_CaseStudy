@@ -39,15 +39,24 @@ def _extract_citations(trace: list) -> list[dict]:
     return citations
 
 
-def ask(question: str) -> dict:
-    logger.info("AI chat: question=%r", question)
+def ask(question: str, history: list[dict] | None = None) -> dict:
+    """Answer `question`, optionally in the context of prior turns.
+
+    `history` is the plain-text transcript so far — alternating user/assistant
+    messages — so follow-ups ("and for NVDA?") resolve. Only the final text of
+    each past turn is replayed, not its tool calls: re-sending the tool blocks
+    would cost a lot of tokens to tell the model things it can just look up
+    again, and `trace` stays scoped to the turn the caller is asking about.
+    The caller is responsible for validating and bounding it.
+    """
+    logger.info("AI chat: question=%r history=%d turns", question, len(history or []))
     trace: list = []
     tools = build_tools(trace)
     runner = _client().beta.messages.tool_runner(
         model=ANTHROPIC_MODEL,
         max_tokens=MAX_TOKENS,
         system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": question}],
+        messages=[*(history or []), {"role": "user", "content": question}],
         tools=tools,
         max_iterations=MAX_ITERATIONS,
     )

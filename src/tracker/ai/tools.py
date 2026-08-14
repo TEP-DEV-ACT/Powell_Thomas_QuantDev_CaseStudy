@@ -35,8 +35,11 @@ def build_tools(trace: list) -> list:
     def get_fundamentals(ticker: str, years: int = 5) -> str:
         """Reported and derived annual fundamentals for one company: revenue,
         net income, diluted EPS, gross margin, operating margin, free cash
-        flow, and each one's year-over-year change. Use this for questions
-        about a single company's reported numbers or growth over time.
+        flow, the per-share variants of revenue/net income/free cash flow,
+        and each one's year-over-year change. Absolute dollar figures are in
+        whole US dollars as reported to EDGAR, not millions. Use this for
+        questions about a single company's reported numbers or growth over
+        time.
 
         Args:
             ticker: Stock ticker — one of NVDA, MSFT, AAPL, GOOGL, ETN.
@@ -57,8 +60,18 @@ def build_tools(trace: list) -> list:
         single fiscal year, highest to lowest. Use this for "which company
         had the highest/lowest X" or any cross-company comparison.
 
+        Prefer the per-share or margin metrics for cross-company questions —
+        the absolute dollar metrics mostly just rank the companies by size.
+        Per-share figures divide by the as-reported diluted share count,
+        which EDGAR does not restate for stock splits, so a company's
+        per-share series steps sharply across its split years (GOOGL 20:1 in
+        2022, NVDA 10:1 in FY2025, AAPL 4:1 in 2020). Say so rather than
+        reading such a step as a change in performance.
+
         Args:
-            metric: One of revenue, net_income, eps_diluted, gross_margin, operating_margin, free_cash_flow.
+            metric: One of revenue, net_income, free_cash_flow, eps_diluted,
+                revenue_per_share, net_income_per_share, fcf_per_share,
+                gross_margin, operating_margin.
             fiscal_year: The fiscal year to compare, e.g. 2024.
         """
         result = _compare_companies(metric, fiscal_year)

@@ -1,20 +1,82 @@
+/* Montserrat, served from static/fonts rather than a font CDN so the app has
+   no third-party dependency for its own typography. These are the two variable
+   files — one per optical style — so a single request covers every weight the
+   UI uses (400 body, 500 chrome, 600 headings) instead of three static cuts.
+   Paths are relative to this stylesheet, which Flask serves from /static/. */
+@font-face {
+  font-family: "Montserrat";
+  src: url("fonts/Montserrat/Montserrat-VariableFont_wght.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Montserrat";
+  src: url("fonts/Montserrat/Montserrat-Italic-VariableFont_wght.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* The type token lives on :root, not on .viz-root with the palette below —
+   `body` is an *ancestor* of .viz-root, and custom properties only inherit
+   downwards, so a --font-sans declared there would be invalid on body and the
+   whole page would silently render in the browser's serif default.
+   app.js mirrors this stack into PLOTLY_FONT; the two must stay in sync or the
+   chart labels drift out of the page's typography. */
+:root {
+  --font-sans: "Montserrat", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+/* Schonfeld palette. The brand tokens below are lifted verbatim from
+   schonfeld.com's theme stylesheet and drive all page chrome.
+
+   The chart series are *derived* from the brand hues rather than taken
+   literally: the brand colours themselves fail as a categorical data ramp
+   (--schonfeld-blue is too dark, --schonfeld-khaki and --schonfeld-soft-black
+   are too low-chroma to hold their identity as a fill). The five --series-*
+   steps below sit in the same hue families, re-stepped for lightness and
+   chroma, and are verified for colour-blind separation against --surface-1.
+   app.js mirrors them for Plotly, which cannot read CSS custom properties. */
 .viz-root {
   color-scheme: light;
-  --surface-1:      #fcfcfb;
-  --page-plane:     #f9f9f7;
-  --text-primary:   #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted:     #898781;
-  --gridline:       #e1e0d9;
-  --baseline:       #c3c2b7;
-  --border:         rgba(11,11,11,0.10);
-  --delta-good:     #006300;
-  --delta-bad:      #d03b3b;
-  --series-1:       #2a78d6;
-  --series-2:       #eb6834;
-  --series-3:       #1baf7a;
-  --series-4:       #eda100;
-  --series-5:       #e87ba4;
+
+  --schonfeld-blue:       #0000a0;
+  --schonfeld-teal:       #00acac;
+  --schonfeld-khaki:      #b4a680;
+  --schonfeld-violet:     #6408da;
+  --schonfeld-soft-black: #282828;
+  --schonfeld-soft-grey:  #f2ece3;
+  --schonfeld-dirty-gray: #d9d9d9;
+
+  --surface-1:      #fbfaf7;
+  --page-plane:     var(--schonfeld-soft-grey);
+  --text-primary:   var(--schonfeld-soft-black);
+  --text-secondary: #57544e;
+  --text-muted:     #8a857c;
+  --gridline:       #e4ded3;
+  --baseline:       #cdc6b8;
+  --border:         rgba(40,40,40,0.12);
+
+  /* Interactive chrome carries the brand blue exactly; it is deliberately
+     not a --series-* value, so re-stepping the chart ramp never restyles
+     the buttons and vice versa. */
+  --accent:         var(--schonfeld-blue);
+  --accent-quiet:   #4a4ab8;
+
+  /* Up/down keep conventional green/red — legibility of a financial delta
+     outranks brand fidelity here — warmed slightly to sit on the cream. */
+  --delta-good:     #1a6b32;
+  --delta-bad:      #bf3b30;
+
+  --series-1:       #4174ec;  /* blue   */
+  --series-2:       #30b6ba;  /* teal   */
+  --series-3:       #c39c2e;  /* khaki  */
+  --series-4:       #7942b0;  /* violet */
+  --series-5:       #3a8753;  /* green  */
+
+  --chat-w: 380px;
+  --rail-w: 48px;
 }
 
 * { box-sizing: border-box; }
@@ -23,21 +85,55 @@ body {
   margin: 0;
   background: var(--page-plane);
   color: var(--text-primary);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------- shell -- */
+
+/* Two independently scrolling columns pinned to the viewport: the chat stays
+   put while the charts scroll past it. minmax(0, 1fr) on the right track is
+   load-bearing — without the zero minimum a wide Plotly SVG blows the track
+   out and the whole page scrolls sideways. */
+.viz-root {
+  display: grid;
+  grid-template-columns: var(--chat-w) minmax(0, 1fr);
+  height: 100vh;
+  transition: grid-template-columns 180ms ease;
+}
+
+.viz-root[data-chat="collapsed"] { --chat-w: var(--rail-w); }
+
+.main-pane {
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* The card grid sizes against this pane, not the viewport — collapsing the
+     chat rail has to make the charts wider, and a viewport media query can't
+     see that the pane just grew by 330px. */
+  container-type: inline-size;
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   padding: 16px 24px;
   border-bottom: 1px solid var(--border);
   background: var(--surface-1);
 }
 
-.topbar h1 { font-size: 18px; margin: 0; }
+.topbar h1 {
+  font-size: 18px;
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
 
-.ticker-select { display: flex; gap: 6px; }
+.ticker-select { display: flex; gap: 6px; flex-wrap: wrap; }
 
 .ticker-btn {
   border: 1px solid var(--baseline);
@@ -47,46 +143,373 @@ body {
   border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: border-color 120ms ease, color 120ms ease;
 }
 
-.ticker-btn.active {
-  background: var(--series-1);
+.ticker-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.ticker-btn.active,
+.ticker-btn.active:hover {
+  background: var(--accent);
   color: white;
-  border-color: var(--series-1);
+  border-color: var(--accent);
 }
 
-.grid {
+/* ----------------------------------------------------------- chat rail -- */
+
+.chat-rail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--surface-1);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 12px 16px 20px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.chat-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.chat-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.chat-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.chat-empty {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* Collapsed: the rail keeps only a vertical tab that reopens it. The body is
+   display:none rather than width:0 so its contents can't be tabbed into. */
+.viz-root[data-chat="collapsed"] .chat-head h2,
+.viz-root[data-chat="collapsed"] .chat-body { display: none; }
+.viz-root[data-chat="collapsed"] .chat-head { padding: 16px 0; justify-content: center; }
+.viz-root[data-chat="collapsed"] #chat-toggle svg { transform: scaleX(-1); }
+
+.chat-rail-tab {
+  display: none;
+  flex: 1;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+.chat-rail-tab span { writing-mode: vertical-rl; }
+.chat-rail-tab:hover { color: var(--accent); }
+.viz-root[data-chat="collapsed"] .chat-rail-tab { display: flex; justify-content: center; }
+
+/* --------------------------------------------------------- chat messages -- */
+
+.msg { font-size: 15px; line-height: 1.6; }
+
+.msg-user {
+  align-self: flex-end;
+  max-width: 92%;
+  background: var(--accent);
+  color: white;
+  border-radius: 12px 12px 4px 12px;
+  padding: 9px 14px;
+  white-space: pre-wrap;   /* user text is inserted as textContent, not <br> */
+  overflow-wrap: anywhere;
+}
+
+/* No white-space:pre-wrap here: renderAnswerText already turns newlines into
+   <br>, and the two together double-space every paragraph. */
+.msg-bot {
+  color: var(--text-primary);
+  border-left: 2px solid var(--baseline);
+  padding-left: 12px;
+  overflow-wrap: anywhere;
+}
+
+.msg-bot.is-error { border-left-color: var(--delta-bad); color: var(--delta-bad); }
+
+.msg-citations { margin-top: 8px; }
+
+.citation-chip {
+  display: inline-block;
+  border: 1px solid var(--baseline);
+  border-radius: 999px;
+  padding: 2px 10px;
+  margin: 2px 4px 2px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.citation-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+.msg-trace { margin-top: 8px; font-size: 13px; color: var(--text-muted); }
+.msg-trace summary { cursor: pointer; }
+.msg-trace pre {
+  background: var(--page-plane);
+  border: 1px solid var(--gridline);
+  border-radius: 6px;
+  padding: 10px;
+  margin: 8px 0 0 0;
+  font-size: 12px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+/* Three-dot thinking indicator on the pending assistant turn. */
+.typing { display: inline-flex; gap: 4px; align-items: center; height: 24px; }
+.typing i {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-muted);
+  animation: typing 1.2s infinite ease-in-out;
+}
+.typing i:nth-child(2) { animation-delay: 0.15s; }
+.typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes typing {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30%           { opacity: 1;    transform: translateY(-3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .typing i { animation: none; opacity: 0.5; }
+  .viz-root { transition: none; }
+}
+
+.chat-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border);
+}
+
+#qa-question {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  border: 1px solid var(--baseline);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 15px;
+  line-height: 1.5;
+  font-family: inherit;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  max-height: 160px;
+}
+#qa-question:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+
+#qa-send {
+  border: none;
+  background: var(--accent);
+  color: white;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+}
+#qa-send:disabled, #qa-question:disabled { opacity: 0.55; cursor: default; }
+
+/* ---------------------------------------------------------------- cards -- */
+
+/* Two columns at most, deliberately: auto-fit would add a third when the rail
+   collapses, which makes every chart *narrower* on the gesture that was meant
+   to give them room. */
+.card-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 16px;
   padding: 20px 24px;
-  max-width: 1400px;
-  margin: 0 auto;
+  align-items: start;
 }
 
-.panel {
+@container (min-width: 900px) {
+  .card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .card-wide { grid-column: 1 / -1; }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px 20px;
 }
 
-.panel h2 {
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.card-head h2 {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
-  margin: 0 0 12px 0;
+  margin: 0;
+  min-width: 0;
 }
+
+.card-body { min-width: 0; }
 
 .muted { color: var(--text-muted); font-weight: 400; font-size: 12px; }
 
-.panel-capex, .panel-qa { grid-column: 1 / -1; }
+/* --------------------------------------------------------- card toolbar -- */
 
-.capex-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+/* Injected by app.js so the icon set is defined in exactly one place. Kept at
+   low contrast until the card is hovered or something inside it is focused,
+   so eighteen buttons don't compete with the data. */
+.card-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  opacity: 0.35;
+  transition: opacity 120ms ease;
 }
+.card:hover .card-tools,
+.card:focus-within .card-tools { opacity: 1; }
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+}
+.icon-btn:hover { border-color: var(--baseline); color: var(--accent); background: var(--page-plane); }
+.icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.icon-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.icon-btn.is-ok { color: var(--delta-good); }
+
+/* <details> gives the PNG/JPEG picker its open/close behaviour for free. */
+.dl-menu { position: relative; }
+.dl-menu > summary { list-style: none; }
+.dl-menu > summary::-webkit-details-marker { display: none; }
+
+.dl-menu-items {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 132px;
+  padding: 4px;
+  background: var(--surface-1);
+  border: 1px solid var(--baseline);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(40,40,40,0.14);
+}
+.dl-menu-items button {
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dl-menu-items button:hover { background: var(--page-plane); color: var(--accent); }
+
+/* ----------------------------------------------------------- fullscreen -- */
+
+/* A fullscreened element gets a black backdrop by default, and it keeps the
+   card's own padding — both have to be restated here. */
+.card:fullscreen,
+.card.faux-fullscreen {
+  background: var(--surface-1);
+  border-radius: 0;
+  padding: 24px 32px;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+/* Fallback for contexts where requestFullscreen is unavailable or rejected
+   (e.g. the page embedded in a sandboxed iframe). */
+.card.faux-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+.card:fullscreen .card-body,
+.card.faux-fullscreen .card-body { flex: 1; display: flex; flex-direction: column; }
+
+/* The plot takes whatever the flexed card body has left, so the compare card's
+   metric/year controls keep their space instead of being pushed off-screen.
+   A ResizeObserver in app.js relays the new box to Plotly. */
+.card:fullscreen .plot,
+.card.faux-fullscreen .plot { flex: 1 1 auto; height: auto; min-height: 0; }
+
+.card:fullscreen .table-scroll,
+.card.faux-fullscreen .table-scroll { flex: 1; }
+.card:fullscreen table.fundamentals,
+.card.faux-fullscreen table.fundamentals { font-size: 15px; }
+
+/* ----------------------------------------------------------- plots/table -- */
+
+/* Heights live here, not in app.js's Plotly layout, so :fullscreen can change
+   them. Plotly is created with responsive:true and no layout.height, so it
+   sizes to whatever this container is. */
+.plot { height: var(--plot-h, 300px); min-height: 0; }
+.plot-tall { --plot-h: 360px; }
+
+.table-scroll { overflow-x: auto; }
 
 table.fundamentals {
   width: 100%;
@@ -99,6 +522,7 @@ table.fundamentals th, table.fundamentals td {
   text-align: right;
   padding: 6px 8px;
   border-bottom: 1px solid var(--gridline);
+  white-space: nowrap;
 }
 
 table.fundamentals th:first-child, table.fundamentals td:first-child {
@@ -112,59 +536,41 @@ table.fundamentals th { color: var(--text-muted); font-weight: 500; }
 .delta-down { color: var(--delta-bad); }
 .swing-flag { cursor: help; }
 
-.compare-controls { display: flex; gap: 8px; margin-bottom: 12px; }
+.compare-controls { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .compare-controls select {
   border: 1px solid var(--baseline);
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 13px;
+  font-family: inherit;
   background: var(--surface-1);
   color: var(--text-primary);
 }
+.compare-controls select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-#qa-form { display: flex; gap: 8px; margin-bottom: 12px; }
-#qa-question {
-  flex: 1;
-  border: 1px solid var(--baseline);
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 14px;
-}
-#qa-form button {
-  border: none;
-  background: var(--series-1);
-  color: white;
-  border-radius: 6px;
-  padding: 8px 18px;
-  font-size: 14px;
-  cursor: pointer;
-}
-#qa-form button:disabled { opacity: 0.6; cursor: default; }
+/* ---------------------------------------------------------------- toast -- */
 
-#qa-answer { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
-
-.citation-chip {
-  display: inline-block;
-  border: 1px solid var(--baseline);
-  border-radius: 999px;
-  padding: 2px 10px;
-  margin: 2px 4px 2px 0;
-  font-size: 12px;
-  color: var(--text-secondary);
-  text-decoration: none;
+.toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 200;
+  max-width: 320px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--schonfeld-soft-black);
+  color: var(--surface-1);
+  font-size: 13px;
+  box-shadow: 0 6px 20px rgba(40,40,40,0.24);
 }
-.citation-chip:hover { border-color: var(--series-1); color: var(--series-1); }
+.toast[hidden] { display: none; }
 
-#qa-trace {
-  background: var(--page-plane);
-  border: 1px solid var(--gridline);
-  border-radius: 6px;
-  padding: 10px;
-  font-size: 12px;
-  overflow-x: auto;
-}
+/* ----------------------------------------------------------- responsive -- */
 
 @media (max-width: 900px) {
-  .grid { grid-template-columns: 1fr; }
-  .capex-grid { grid-template-columns: 1fr; }
+  .viz-root { grid-template-columns: 1fr; height: auto; }
+  .chat-rail { border-right: none; border-bottom: 1px solid var(--border); }
+  .chat-body { max-height: 55vh; }
+  .viz-root[data-chat="collapsed"] .chat-rail-tab span { writing-mode: horizontal-tb; }
+  .viz-root[data-chat="collapsed"] .chat-rail-tab { padding: 12px 0; }
 }

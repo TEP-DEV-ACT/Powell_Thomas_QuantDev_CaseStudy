@@ -16,6 +16,53 @@ logger = logging.getLogger(__name__)
 
 api = Blueprint("api", __name__, url_prefix="/api")
 
+# The chat transcript round-trips through the browser, so it is untrusted input
+# and it is also what the next request has to pay for in tokens. Both limits are
+# enforced server-side; the system prompt is never client-influenced.
+MAX_HISTORY_TURNS = 10
+MAX_HISTORY_CHARS = 4000
+
+
+def _clean_history(raw) -> list[dict]:
+    """Validate and bound a client-supplied transcript.
+
+    Raises ValueError on anything malformed rather than silently dropping it —
+    a client that posts a broken transcript has a bug worth surfacing.
+    """
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValueError("history must be a list")
+
+    turns: list[dict] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise ValueError("each history entry must be an object")
+        role, content = entry.get("role"), entry.get("content")
+        if role not in ("user", "assistant"):
+            raise ValueError(f"invalid history role: {role!r}")
+        if not isinstance(content, str):
+            raise ValueError("history content must be a string")
+        content = content.strip()[:MAX_HISTORY_CHARS]
+        if not content:
+            continue
+        # The API wants alternating turns; a client that appends two user
+        # messages in a row (e.g. after a failed request) gets them merged
+        # rather than a 400 from Anthropic.
+        if turns and turns[-1]["role"] == role:
+            turns[-1]["content"] = f"{turns[-1]['content']}\n\n{content}"
+        else:
+            turns.append({"role": role, "content": content})
+
+    turns = turns[-MAX_HISTORY_TURNS:]
+    # The new question is appended as a user turn, so a transcript ending in an
+    # unanswered user message would produce two user turns in a row.
+    if turns and turns[0]["role"] == "assistant":
+        turns = turns[1:]
+    if turns and turns[-1]["role"] == "user":
+        turns = turns[:-1]
+    return turns
+
 
 @api.get("/companies")
 def companies():
@@ -109,7 +156,12 @@ def ask():
     if not question:
         return jsonify({"error": "question is required"}), 400
     try:
-        result = ask_agent(question)
+        history = _clean_history(payload.get("history"))
+    except ValueError as exc:
+        logger.warning("POST /api/ask rejected history: %s", exc)
+        return jsonify({"error": str(exc)}), 400
+    try:
+        result = ask_agent(question, history=history)
     except Exception as exc:
         logger.exception("AI agent error answering question=%r", question)
         return jsonify({"error": f"agent error: {exc}"}), 502

@@ -1,7 +1,16 @@
 """Hand-checked fixtures for the pure metrics functions."""
 from tracker.metrics.capex import capex_cycle_beta, capex_intensity
 from tracker.metrics.derived import margin_delta_bps, with_yoy, yoy_growth
-from tracker.metrics.reported import free_cash_flow, gross_margin, operating_margin, with_reported_metrics
+from tracker.metrics.reported import (
+    diluted_share_count,
+    fcf_per_share,
+    free_cash_flow,
+    gross_margin,
+    net_income_per_share,
+    operating_margin,
+    revenue_per_share,
+    with_reported_metrics,
+)
 from tracker.metrics.valuation import price_to_sales, trailing_pe
 
 
@@ -29,6 +38,45 @@ def test_with_reported_metrics_attaches_all_three():
     assert round(enriched["gross_margin"], 4) == round(180683 / 391035, 4)
     assert round(enriched["operating_margin"], 4) == round(123216 / 391035, 4)
     assert enriched["free_cash_flow"] == 118254 - 9447
+
+
+def test_diluted_share_count_prefers_the_reported_column():
+    assert diluted_share_count({"diluted_shares": 1000, "net_income": 50, "eps_diluted": 0.1}) == 1000
+
+
+def test_diluted_share_count_falls_back_to_net_income_over_eps():
+    # GOOGL FY2015-2023 has no WeightedAverageNumberOfDilutedSharesOutstanding tag
+    assert diluted_share_count({"diluted_shares": None, "net_income": 100, "eps_diluted": 0.5}) == 200
+
+
+def test_diluted_share_count_missing_inputs():
+    assert diluted_share_count({"diluted_shares": None, "net_income": 100, "eps_diluted": None}) is None
+    assert diluted_share_count({"diluted_shares": None, "net_income": 100, "eps_diluted": 0}) is None
+    assert diluted_share_count({"diluted_shares": 0, "net_income": None, "eps_diluted": 2}) is None
+
+
+def test_per_share_metrics():
+    row = {"revenue": 1000, "net_income": 100, "diluted_shares": 50,
+           "operating_cash_flow": 120, "capex": 20}
+    assert revenue_per_share(row) == 20.0
+    assert net_income_per_share(row) == 2.0
+    assert fcf_per_share(row) == 2.0  # (120 - 20) / 50
+
+
+def test_per_share_metrics_missing_inputs():
+    assert revenue_per_share({"revenue": 1000, "diluted_shares": None}) is None
+    assert revenue_per_share({"revenue": None, "diluted_shares": 50}) is None
+    # no capex -> no FCF -> no FCF per share, even though shares are known
+    assert fcf_per_share({"operating_cash_flow": 120, "capex": None, "diluted_shares": 50}) is None
+
+
+def test_with_reported_metrics_attaches_per_share():
+    row = {"revenue": 391035, "net_income": 93736, "diluted_shares": 15408,
+           "operating_cash_flow": 118254, "capex": 9447}
+    enriched = with_reported_metrics(row)
+    assert round(enriched["revenue_per_share"], 4) == round(391035 / 15408, 4)
+    assert round(enriched["net_income_per_share"], 4) == round(93736 / 15408, 4)
+    assert round(enriched["fcf_per_share"], 4) == round((118254 - 9447) / 15408, 4)
 
 
 def test_yoy_growth():

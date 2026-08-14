@@ -828,6 +828,18 @@ function setChatCollapsed(collapsed) {
   expand.tabIndex = collapsed ? 0 : -1;
   expand.setAttribute("aria-hidden", String(!collapsed));
   try { localStorage.setItem(CHAT_STATE_KEY, collapsed ? "collapsed" : "open"); } catch { /* private mode */ }
+  // setChatWidth (drag-resize) sets --chat-w inline, which — being inline —
+  // outranks the [data-chat="collapsed"] stylesheet rule that's supposed to
+  // shrink the rail to --rail-w. Dropping the inline override on collapse
+  // lets that rule win; restoring the stored width on expand undoes it.
+  if (collapsed) {
+    root.style.removeProperty("--chat-w");
+  } else {
+    try {
+      const stored = parseInt(localStorage.getItem(CHAT_WIDTH_KEY), 10);
+      if (!Number.isNaN(stored)) setChatWidth(stored);
+    } catch { /* private mode */ }
+  }
 }
 
 function initChatCollapse() {
@@ -839,6 +851,67 @@ function initChatCollapse() {
     setChatCollapsed(document.getElementById("viz-root").dataset.chat !== "collapsed");
   });
   document.getElementById("chat-expand").addEventListener("click", () => setChatCollapsed(false));
+}
+
+// Restores the exact markup initChat's HTML starts with, so "Clear chat" and
+// a fresh page load leave the rail in an identical state.
+const CHAT_EMPTY_HTML = `<p class="chat-empty">
+          Ask about revenue, margins, cash flow, capex or what management said
+          about them. Follow-up questions keep the thread — “and for NVDA?” works.
+        </p>`;
+
+function clearChat() {
+  chatHistory.length = 0;
+  document.getElementById("chat-log").innerHTML = CHAT_EMPTY_HTML;
+}
+
+function initChatClear() {
+  document.getElementById("chat-clear").addEventListener("click", clearChat);
+}
+
+const CHAT_WIDTH_KEY = "tracker.chatWidth";
+const CHAT_MIN_W = 300;
+const CHAT_MAX_W = 720;
+
+function setChatWidth(px) {
+  const clamped = Math.min(CHAT_MAX_W, Math.max(CHAT_MIN_W, Math.round(px)));
+  document.getElementById("viz-root").style.setProperty("--chat-w", `${clamped}px`);
+  try { localStorage.setItem(CHAT_WIDTH_KEY, String(clamped)); } catch { /* private mode */ }
+}
+
+// Pointer capture (rather than a document-level mousemove listener) keeps
+// delivering move/up events to the handle even once the cursor leaves it
+// mid-drag, without needing manual listener add/remove bookkeeping.
+// Must run after initChatCollapse, which already applies the stored width
+// when starting expanded (and deliberately leaves --chat-w unset when
+// starting collapsed, so the [data-chat="collapsed"] rule controls it).
+function initChatResize() {
+  const root = document.getElementById("viz-root");
+  const rail = document.getElementById("chat-rail");
+  const handle = document.getElementById("chat-resize");
+
+  let dragging = false;
+
+  handle.addEventListener("pointerdown", e => {
+    if (root.dataset.chat === "collapsed") return;
+    dragging = true;
+    handle.setPointerCapture(e.pointerId);
+    root.classList.add("is-resizing");
+  });
+
+  handle.addEventListener("pointermove", e => {
+    if (!dragging) return;
+    setChatWidth(e.clientX - rail.getBoundingClientRect().left);
+  });
+
+  const stopDrag = e => {
+    if (!dragging) return;
+    dragging = false;
+    root.classList.remove("is-resizing");
+    if (handle.hasPointerCapture(e.pointerId)) handle.releasePointerCapture(e.pointerId);
+  };
+  handle.addEventListener("pointerup", stopDrag);
+  handle.addEventListener("pointercancel", stopDrag);
 }
 
 // ---------------------------------------------------------------------------
@@ -854,6 +927,8 @@ document.getElementById("compare-year").addEventListener("change", loadCompareCh
 initCardTools();
 initChat();
 initChatCollapse();
+initChatClear();
+initChatResize();
 observePlots();
 
 // Plotly lays out axis ticks against measured text width, so plotting before

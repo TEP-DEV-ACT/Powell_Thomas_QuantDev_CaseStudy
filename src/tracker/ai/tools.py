@@ -49,8 +49,7 @@ def build_tools(trace: list) -> list:
     def get_fundamentals(ticker: str, years: int = 5) -> str:
         """Reported and derived annual fundamentals for one company: revenue,
         net income, diluted EPS, gross margin, operating margin, net income
-        margin, free cash flow, FCF margin, the per-share variants of
-        revenue/net income/free cash flow, and each one's year-over-year
+        margin, free cash flow, FCF margin, and each one's year-over-year
         change. Also includes other_income_adjustments (the pre-tax
         non-operating income/expense embedded in net income — the as-reported
         "other income (expense), net" line, which may also bundle in interest
@@ -90,16 +89,10 @@ def build_tools(trace: list) -> list:
         market cap (latest close x latest reported diluted shares), so it
         answers "what would a buyer at today's price be getting on that
         year's cash flow," not a point-in-time historical yield — say so if
-        the question implies the latter. The per-share metrics divide by the
-        as-reported diluted share count, which EDGAR does not restate for
-        stock splits, so a company's per-share series steps sharply across
-        its split years (GOOGL 20:1 in 2022, NVDA 10:1 in FY2025, AAPL 4:1 in
-        2020) — margins and yields are immune to this and should be preferred
-        when available.
+        the question implies the latter.
 
         Args:
             metric: One of revenue, net_income, free_cash_flow, eps_diluted,
-                revenue_per_share, net_income_per_share, fcf_per_share,
                 gross_margin, operating_margin, net_income_margin,
                 fcf_margin, fcf_yield.
             fiscal_year: The fiscal year to compare, e.g. 2024.

@@ -7,14 +7,11 @@ from tracker.metrics.reported import (
     diluted_share_count,
     effective_tax_rate,
     fcf_margin,
-    fcf_per_share,
     free_cash_flow,
     gross_margin,
     net_income_margin,
-    net_income_per_share,
     operating_margin,
     other_income_adjustments,
-    revenue_per_share,
     with_reported_metrics,
 )
 from tracker.metrics.valuation import fcf_yield, market_cap, price_to_sales, trailing_pe
@@ -145,28 +142,22 @@ def test_diluted_share_count_missing_inputs():
     assert diluted_share_count({"diluted_shares": 0, "net_income": None, "eps_diluted": 2}) is None
 
 
-def test_per_share_metrics():
-    row = {"revenue": 1000, "net_income": 100, "diluted_shares": 50,
-           "operating_cash_flow": 120, "capex": 20}
-    assert revenue_per_share(row) == 20.0
-    assert net_income_per_share(row) == 2.0
-    assert fcf_per_share(row) == 2.0  # (120 - 20) / 50
+def test_diluted_share_count_rejects_a_reported_count_1000x_off_the_implied_count():
+    # NVDA FY2010's WeightedAverageNumberOfDilutedSharesOutstanding XBRL fact
+    # is filed by SEC as 588,684 instead of ~588,684,000 (confirmed against
+    # data.sec.gov's own companyconcept API — SEC's own data, not an
+    # ingestion bug). net_income / eps_diluted implies the real ~588.7M count;
+    # the ~1000x-off reported count must be rejected in favor of it.
+    row = {"diluted_shares": 588684, "net_income": 253_146_000, "eps_diluted": 0.43}
+    implied = 253_146_000 / 0.43
+    assert diluted_share_count(row) == implied
 
 
-def test_per_share_metrics_missing_inputs():
-    assert revenue_per_share({"revenue": 1000, "diluted_shares": None}) is None
-    assert revenue_per_share({"revenue": None, "diluted_shares": 50}) is None
-    # no capex -> no FCF -> no FCF per share, even though shares are known
-    assert fcf_per_share({"operating_cash_flow": 120, "capex": None, "diluted_shares": 50}) is None
-
-
-def test_with_reported_metrics_attaches_per_share():
-    row = {"revenue": 391035, "net_income": 93736, "diluted_shares": 15408,
-           "operating_cash_flow": 118254, "capex": 9447}
-    enriched = with_reported_metrics(row)
-    assert round(enriched["revenue_per_share"], 4) == round(391035 / 15408, 4)
-    assert round(enriched["net_income_per_share"], 4) == round(93736 / 15408, 4)
-    assert round(enriched["fcf_per_share"], 4) == round((118254 - 9447) / 15408, 4)
+def test_diluted_share_count_keeps_a_reported_count_close_to_implied():
+    # GOOGL FY2024: 12,452.5M implied vs 12,447M reported — within ~0.05%,
+    # well inside the acceptance band, so the reported column wins as usual.
+    row = {"diluted_shares": 12447, "net_income": 100_118, "eps_diluted": 8.04}
+    assert diluted_share_count(row) == 12447
 
 
 def test_yoy_growth():

@@ -73,6 +73,8 @@ shown as a plain, misleading percentage. The price card plots ~3 years of daily 
 with dotted vertical markers at each fiscal-year-end date, so the price series lines up visually
 with the reported periods.
 
+![Dashboard — NVDA selected, fundamentals table, price chart, and the three capex-cycle panels](docs/screenshots/dashboard-nvda.png)
+
 **2. The "own metric" — Capex Cycle**
 
 Three cards cover the capex story, per company: capex intensity (capex ÷ revenue) as a bar chart
@@ -95,6 +97,8 @@ The tool-call trace under that answer shows both tools fired: `get_fundamentals`
 `search_filings` (the MD&A narrative), each with the raw tool result — the grounding audit trail.
 The chat is multi-turn: the transcript is posted back with each question, so "and for NVDA?"
 resolves against the previous answer.
+
+![Q&A panel — the MSFT cross-modal question above, answered live, with the citation chip and expandable tool-call trace](docs/screenshots/qa-cross-modal.png)
 
 **4. Q&A — out-of-scope, declined rather than invented**
 
@@ -122,3 +126,10 @@ src/tracker/
 tests/               pytest — concepts, metrics, sections, API smoke tests, agent routing
 data/seed/           committed gzipped-CSV snapshot (auto-loaded by run.sh on an empty DB)
 ```
+
+## Submission attestation
+
+I have completed the following Schonfeld Case Study solely using publicly available sources of
+information. Accordingly, I further confirm that I have not used any Material Non-Public
+Information (within the meaning of U.S. federal securities laws) and information that is subject
+to a duty or contractual restriction to a third party.

@@ -104,6 +104,13 @@ body {
 
 .viz-root[data-chat="collapsed"] { --chat-w: var(--rail-w); }
 
+/* Dragging sets --chat-w on every pointermove; the 180ms grid transition
+   turns that into a laggy trail behind the cursor, so it's suspended for
+   the duration of the drag. */
+.viz-root.is-resizing { transition: none; }
+.viz-root.is-resizing,
+.viz-root.is-resizing * { cursor: col-resize !important; user-select: none; }
+
 .main-pane {
   overflow-y: auto;
   overflow-x: hidden;
@@ -160,6 +167,7 @@ body {
 /* ----------------------------------------------------------- chat rail -- */
 
 .chat-rail {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -167,6 +175,23 @@ body {
   border-right: 1px solid var(--border);
   overflow: hidden;
 }
+
+/* Straddles the rail's right border so the grab target is wider than the
+   1px border itself. Lives outside chat-rail's `overflow: hidden` clip
+   region visually by sitting right at the edge rather than overhanging it. */
+.chat-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 6;
+  touch-action: none;
+}
+.chat-resize-handle:hover,
+.viz-root.is-resizing .chat-resize-handle { background: var(--accent-quiet); opacity: 0.5; }
+.viz-root[data-chat="collapsed"] .chat-resize-handle { display: none; }
 
 .chat-head {
   display: flex;
@@ -177,6 +202,8 @@ body {
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
+
+.chat-head-actions { display: flex; align-items: center; gap: 2px; }
 
 .chat-head h2 {
   margin: 0;
@@ -212,6 +239,7 @@ body {
 /* Collapsed: the rail keeps only a vertical tab that reopens it. The body is
    display:none rather than width:0 so its contents can't be tabbed into. */
 .viz-root[data-chat="collapsed"] .chat-head h2,
+.viz-root[data-chat="collapsed"] #chat-clear,
 .viz-root[data-chat="collapsed"] .chat-body { display: none; }
 .viz-root[data-chat="collapsed"] .chat-head { padding: 16px 0; justify-content: center; }
 .viz-root[data-chat="collapsed"] #chat-toggle svg { transform: scaleX(-1); }
@@ -572,6 +600,7 @@ table.fundamentals th { color: var(--text-muted); font-weight: 500; }
   .viz-root { grid-template-columns: 1fr; height: auto; }
   .chat-rail { border-right: none; border-bottom: 1px solid var(--border); }
   .chat-body { max-height: 55vh; }
+  .chat-resize-handle { display: none; }
   .viz-root[data-chat="collapsed"] .chat-rail-tab span { writing-mode: horizontal-tb; }
   .viz-root[data-chat="collapsed"] .chat-rail-tab { padding: 12px 0; }
 }

@@ -70,6 +70,51 @@ def test_compare_endpoint_adjusted_net_income_margin(client):
     assert rows == sorted(rows, key=lambda r: r["adjusted_net_income_margin"], reverse=True)
 
 
+def test_latest_common_fiscal_year_matches_the_minimum_of_each_tickers_max(client):
+    from tracker.config import UNIVERSE
+    from tracker.metrics.queries import latest_common_fiscal_year
+
+    per_ticker_max = {}
+    for ticker in UNIVERSE:
+        resp = client.get(f"/api/fundamentals/{ticker}")
+        rows = resp.get_json()
+        per_ticker_max[ticker] = max(row["fiscal_year"] for row in rows)
+
+    assert latest_common_fiscal_year() == min(per_ticker_max.values())
+
+
+def test_latest_common_fiscal_year_none_when_a_ticker_has_no_data():
+    from tracker.metrics.queries import latest_common_fiscal_year
+
+    class _FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def execute(self, *args, **kwargs):
+            pass
+
+        def fetchall(self):
+            # Only 4 of the 5 UNIVERSE tickers have a row.
+            return [
+                {"ticker": "NVDA", "max_fy": 2026},
+                {"ticker": "MSFT", "max_fy": 2026},
+                {"ticker": "AAPL", "max_fy": 2025},
+                {"ticker": "GOOGL", "max_fy": 2025},
+            ]
+
+    class _FakeConn:
+        def cursor(self):
+            return _FakeCursor()
+
+        def close(self):
+            pass
+
+    assert latest_common_fiscal_year(conn=_FakeConn()) is None
+
+
 def test_valuation_endpoint(client):
     resp = client.get("/api/valuation/AAPL")
     assert resp.status_code == 200

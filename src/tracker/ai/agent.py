@@ -3,12 +3,14 @@ tools — surfaced to the caller as `trace` so the answer is auditable against
 what was actually retrieved.
 """
 import logging
+from datetime import date
 
 import anthropic
 
-from tracker.ai.prompts import SYSTEM_PROMPT
+from tracker.ai.prompts import build_system_prompt
 from tracker.ai.tools import build_tools
 from tracker.config import ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, ANTHROPIC_MODEL
+from tracker.metrics.queries import latest_common_fiscal_year
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,12 @@ def ask(question: str, history: list[dict] | None = None) -> dict:
     logger.info("AI chat: question=%r history=%d turns", question, len(history or []))
     trace: list = []
     tools = build_tools(trace)
+    try:
+        common_fy = latest_common_fiscal_year()
+    except Exception:
+        logger.exception("AI chat: could not resolve latest_common_fiscal_year, omitting from prompt")
+        common_fy = None
+    system_prompt = build_system_prompt(today=date.today().isoformat(), latest_common_fiscal_year=common_fy)
     # Individual tool failures are already caught and turned into structured
     # {"error": ...} results inside build_tools (ai/tools.py) so a single bad
     # DB read doesn't abort the turn. What's caught here is everything
@@ -62,7 +70,7 @@ def ask(question: str, history: list[dict] | None = None) -> dict:
         runner = _client().beta.messages.tool_runner(
             model=ANTHROPIC_MODEL,
             max_tokens=MAX_TOKENS,
-            system=SYSTEM_PROMPT,
+            system=system_prompt,
             messages=[*(history or []), {"role": "user", "content": question}],
             tools=tools,
             max_iterations=MAX_ITERATIONS,

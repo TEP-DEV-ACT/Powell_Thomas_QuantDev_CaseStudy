@@ -14,6 +14,10 @@ def _tools_used(result):
     return [t["tool"] for t in result["trace"]]
 
 
+def _inputs_for(result, tool_name):
+    return [t["input"] for t in result["trace"] if t["tool"] == tool_name]
+
+
 def test_structured_question_uses_get_fundamentals():
     from tracker.ai.agent import ask
 
@@ -24,9 +28,17 @@ def test_structured_question_uses_get_fundamentals():
 
 def test_comparative_question_uses_compare_companies():
     from tracker.ai.agent import ask
+    from tracker.metrics.queries import latest_common_fiscal_year
 
     result = ask("Which of the five companies had the highest gross margin last year?")
     assert "compare_companies" in _tools_used(result)
+    # Not just which tool fired — an unqualified "last year" must resolve to
+    # the latest fiscal year common to all five companies, not a stale guess
+    # (this regressed once: the model picked FY2024 while FY2025/FY2026 data
+    # already existed, because it had no way to know what "latest" meant).
+    expected_fy = latest_common_fiscal_year()
+    fiscal_years_asked = [i["fiscal_year"] for i in _inputs_for(result, "compare_companies")]
+    assert expected_fy in fiscal_years_asked
 
 
 def test_cross_source_question_uses_get_valuation():

@@ -61,6 +61,37 @@ def _latest_market_cap(conn, ticker: str) -> dict | None:
     }
 
 
+def latest_common_fiscal_year(conn=None) -> int | None:
+    """The most recent fiscal year for which every company in UNIVERSE has a
+    fundamentals row — the fair, unambiguous choice for an unqualified "last
+    year" / "most recent year" in a cross-company comparison.
+
+    The universe's fiscal year ends don't line up (NVDA Jan, MSFT Jun, AAPL
+    Sep, GOOGL/ETN Dec), and filers report at different times, so NVDA/MSFT
+    can already have a later fiscal_year in `fundamentals` than AAPL/GOOGL/
+    ETN. Picking the single overall MAX(fiscal_year) would silently compare
+    some companies against a year the others haven't reported yet; this
+    takes the latest year common to all five instead. Returns None if any
+    tracked ticker has no fundamentals rows at all.
+    """
+    owns_conn = conn is None
+    conn = conn or get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT ticker, MAX(fiscal_year) AS max_fy FROM fundamentals "
+                "WHERE ticker = ANY(%(tickers)s) GROUP BY ticker",
+                {"tickers": UNIVERSE},
+            )
+            rows = cur.fetchall()
+    finally:
+        if owns_conn:
+            conn.close()
+    if len(rows) < len(UNIVERSE):
+        return None
+    return min(row["max_fy"] for row in rows)
+
+
 def compare_companies(metric: str, fiscal_year: int, conn=None) -> list[dict]:
     owns_conn = conn is None
     conn = conn or get_connection()

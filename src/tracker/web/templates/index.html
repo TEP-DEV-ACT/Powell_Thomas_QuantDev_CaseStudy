@@ -21,12 +21,18 @@
 <div class="viz-root" id="viz-root" data-chat="open">
 
   <aside class="chat-rail" id="chat-rail">
+    <div class="chat-resize-handle" id="chat-resize" title="Drag to resize chat" aria-hidden="true"></div>
     <header class="chat-head">
       <h2>Ask the tracker</h2>
-      <button type="button" class="icon-btn" id="chat-toggle"
-              aria-expanded="true" aria-controls="chat-body" title="Collapse chat">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>
-      </button>
+      <div class="chat-head-actions">
+        <button type="button" class="icon-btn" id="chat-clear" title="Clear chat" aria-label="Clear chat">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6 4.5V2.8a.8.8 0 0 1 .8-.8h2.4a.8.8 0 0 1 .8.8v1.7M4.5 4.5l.6 8.6a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-8.6"/></svg>
+        </button>
+        <button type="button" class="icon-btn" id="chat-toggle"
+                aria-expanded="true" aria-controls="chat-body" title="Collapse chat">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>
+        </button>
+      </div>
     </header>
     <div class="chat-body" id="chat-body">
       <div class="chat-log" id="chat-log">

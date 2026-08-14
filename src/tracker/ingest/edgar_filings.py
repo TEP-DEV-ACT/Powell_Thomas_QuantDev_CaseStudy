@@ -3,10 +3,15 @@ fetch each primary document's HTML for section extraction.
 
 Run: python -m tracker.ingest.edgar_filings
 """
+import logging
+
 from tracker.db.session import get_connection
 from tracker.ingest._http import get, sec_session
 from tracker.ingest._runlog import track_run
 from tracker.ingest.companies import fetch_submissions, upsert_companies
+from tracker.logging_config import configure_logging
+
+logger = logging.getLogger(__name__)
 
 ARCHIVES_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{accn_nodashes}/{primary_doc}"
 LATEST_N_FILINGS = 2
@@ -77,7 +82,10 @@ def run():
                     filing_id = upsert_filing(conn, ticker, filing)
                     html = fetch_filing_html(filing, session)
                     counts = extract_and_store_sections(conn, filing_id, html)
-                    print(f"{ticker} FY{filing['fiscal_year']} ({filing['accession_no']}): {counts}")
+                    logger.info(
+                        "%s FY%s (%s): %s",
+                        ticker, filing["fiscal_year"], filing["accession_no"], counts,
+                    )
                     total += 1
             state["row_count"] = total
     finally:
@@ -85,4 +93,5 @@ def run():
 
 
 if __name__ == "__main__":
+    configure_logging()
     run()

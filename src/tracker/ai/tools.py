@@ -4,6 +4,7 @@ metrics/search function, records its call+result into a per-request trace
 never raw numbers computed by the model itself.
 """
 import json
+import logging
 from typing import Optional
 
 from anthropic import beta_tool
@@ -15,6 +16,8 @@ from tracker.metrics.queries import compare_companies as _compare_companies
 from tracker.metrics.queries import get_fundamentals as _get_fundamentals
 from tracker.metrics.valuation import get_valuation as _get_valuation
 
+logger = logging.getLogger(__name__)
+
 
 def _dump(obj) -> str:
     return json.dumps(obj, default=str)
@@ -25,6 +28,7 @@ def build_tools(trace: list) -> list:
     and result to `trace` as a side effect before answering the model."""
 
     def record(name: str, tool_input: dict, result) -> None:
+        logger.info("AI tool call: %s input=%s", name, tool_input)
         trace.append({"tool": name, "input": tool_input, "result": result})
 
     @beta_tool

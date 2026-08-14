@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="5">
+<title>Logs — Fundamentals Tracker</title>
+<style>
+  body { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: #111; color: #ddd; margin: 0; padding: 1rem 1.5rem; }
+  h1 { font-size: 15px; font-weight: 600; color: #fff; margin: 0 0 0.75rem; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { text-align: left; padding: 2px 8px 2px 0; vertical-align: top; white-space: nowrap; }
+  th { color: #888; font-weight: 500; border-bottom: 1px solid #333; }
+  td.message { white-space: pre-wrap; }
+  tr:hover { background: #1a1a1a; }
+  .lvl-INFO { color: #7fb3ff; }
+  .lvl-WARNING { color: #e8c547; }
+  .lvl-ERROR, .lvl-CRITICAL { color: #ff6b6b; }
+  .lvl-DEBUG { color: #888; }
+  .empty { color: #666; }
+</style>
+</head>
+<body>
+<h1>Logs (last {{ records|length }}, newest first — auto-refreshes every 5s)</h1>
+{% if records %}
+<table>
+  <thead><tr><th>Time (UTC)</th><th>Level</th><th>Logger</th><th>Message</th></tr></thead>
+  <tbody>
+  {% for r in records %}
+    <tr>
+      <td>{{ r.time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+      <td class="lvl-{{ r.level }}">{{ r.level }}</td>
+      <td>{{ r.logger }}</td>
+      <td class="message">{{ r.message }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">No log records yet.</p>
+{% endif %}
+</body>
+</html>

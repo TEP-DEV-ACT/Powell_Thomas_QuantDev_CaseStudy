@@ -1,7 +1,11 @@
 """Lexical full-text search over 10-K Item 1A/7 chunks (Postgres FTS —
 see PLAN.md's rationale: no embedding-provider dependency, exact citations).
 """
+import logging
+
 from tracker.db.session import get_connection
+
+logger = logging.getLogger(__name__)
 
 SEARCH_SQL = """
 SELECT
@@ -36,7 +40,12 @@ def search_filings(
                 SEARCH_SQL,
                 {"query": query, "ticker": ticker, "item": item, "fiscal_year": fiscal_year},
             )
-            return cur.fetchall()
+            results = cur.fetchall()
+            logger.info(
+                "search_filings: query=%r ticker=%s item=%s fiscal_year=%s -> %d results",
+                query, ticker, item, fiscal_year, len(results),
+            )
+            return results
     finally:
         if owns_conn:
             conn.close()

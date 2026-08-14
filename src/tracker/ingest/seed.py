@@ -14,10 +14,14 @@ import argparse
 import csv
 import gzip
 import io
+import logging
 import os
 import sys
 
 from tracker.db.session import get_connection
+from tracker.logging_config import configure_logging
+
+logger = logging.getLogger(__name__)
 
 csv.field_size_limit(10_000_000)  # filing_sections.text can exceed the 128KB default
 
@@ -64,7 +68,7 @@ def export_all():
                 writer.writerow(columns)
                 for row in rows:
                     writer.writerow([row[c] for c in columns])
-            print(f"{table}: exported {len(rows)} rows")
+            logger.info("%s: exported %d rows", table, len(rows))
     finally:
         conn.close()
 
@@ -95,7 +99,7 @@ def load_all():
         for table, columns in TABLES:
             path = _seed_path(table)
             if not os.path.exists(path):
-                print(f"{table}: no seed file, skipping")
+                logger.info("%s: no seed file, skipping", table)
                 continue
             with gzip.open(path, "rt", newline="", encoding="utf-8") as f:
                 reader = csv.reader(f)
@@ -108,7 +112,7 @@ def load_all():
                 with conn.cursor() as cur:
                     cur.executemany(sql, rows)
             _reset_sequence(conn, table, columns)
-            print(f"{table}: loaded {len(rows)} rows")
+            logger.info("%s: loaded %d rows", table, len(rows))
         conn.commit()
     finally:
         conn.close()
@@ -125,6 +129,7 @@ def is_empty() -> bool:
 
 
 def main():
+    configure_logging()
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--export", action="store_true")

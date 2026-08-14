@@ -7,6 +7,7 @@ endpoint. Which source served each ticker is recorded in ingest_runs.notes.
 Run: python -m tracker.ingest.prices
 """
 import io
+import logging
 
 import pandas as pd
 import requests
@@ -15,6 +16,9 @@ import yfinance as yf
 from tracker.config import UNIVERSE
 from tracker.db.session import get_connection
 from tracker.ingest._runlog import track_run
+from tracker.logging_config import configure_logging
+
+logger = logging.getLogger(__name__)
 
 STOOQ_URL = "https://stooq.com/q/d/l/?s={symbol}.us&i=d"
 PERIOD = "3y"
@@ -54,7 +58,7 @@ def _fetch_prices(ticker: str) -> tuple[pd.DataFrame, str]:
     try:
         return _from_yfinance(ticker), "yfinance"
     except Exception as exc:
-        print(f"{ticker}: yfinance failed ({exc}), falling back to stooq")
+        logger.warning("%s: yfinance failed (%s), falling back to stooq", ticker, exc)
         return _from_stooq(ticker), "stooq"
 
 
@@ -93,7 +97,7 @@ def run():
             fallback_used = []
             for ticker in UNIVERSE:
                 n, source = ingest_prices_for_ticker(conn, ticker)
-                print(f"{ticker}: {n} rows via {source}")
+                logger.info("%s: %d rows via %s", ticker, n, source)
                 total += n
                 if source != "yfinance":
                     fallback_used.append(f"{ticker}:{source}")
@@ -105,4 +109,5 @@ def run():
 
 
 if __name__ == "__main__":
+    configure_logging()
     run()

@@ -7,6 +7,7 @@ metadata (title/units) is enriched via the JSON API.
 Run: python -m tracker.ingest.macro_fred
 """
 import io
+import logging
 
 import pandas as pd
 import requests
@@ -14,6 +15,9 @@ import requests
 from tracker.config import FRED_API_KEY, FRED_SERIES
 from tracker.db.session import get_connection
 from tracker.ingest._runlog import track_run
+from tracker.logging_config import configure_logging
+
+logger = logging.getLogger(__name__)
 
 CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
 SERIES_META_URL = "https://api.stlouisfed.org/fred/series"
@@ -90,14 +94,16 @@ def run():
             total = 0
             for series_id in FRED_SERIES.values():
                 n = ingest_series(conn, series_id)
-                print(f"{series_id}: {n} observations")
+                logger.info("%s: %d observations", series_id, n)
                 total += n
             state["row_count"] = total
             if not FRED_API_KEY:
+                logger.warning("no FRED_API_KEY set; used keyless CSV endpoint + hardcoded fallback metadata")
                 state["notes"] = "no FRED_API_KEY set; used keyless CSV endpoint + hardcoded fallback metadata"
     finally:
         conn.close()
 
 
 if __name__ == "__main__":
+    configure_logging()
     run()

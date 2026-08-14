@@ -18,12 +18,16 @@ dropping it up front avoids the collision as well as the wrong number.
 
 Run: python -m tracker.ingest.edgar_facts
 """
+import logging
 from datetime import date
 
 from tracker.db.session import get_connection
 from tracker.ingest._http import get, sec_session
 from tracker.ingest._runlog import track_run
 from tracker.ingest.companies import upsert_companies
+from tracker.logging_config import configure_logging
+
+logger = logging.getLogger(__name__)
 
 FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
 MIN_ANNUAL_DURATION_DAYS = 300
@@ -92,7 +96,7 @@ def run():
             total = 0
             for ticker, (cik, _name) in resolved.items():
                 n = ingest_facts_for_ticker(conn, ticker, cik, session)
-                print(f"{ticker} (CIK {cik}): {n} annual fact rows")
+                logger.info("%s (CIK %d): %d annual fact rows", ticker, cik, n)
                 total += n
             state["row_count"] = total
     finally:
@@ -100,4 +104,5 @@ def run():
 
 
 if __name__ == "__main__":
+    configure_logging()
     run()

@@ -2,14 +2,24 @@
 and every access pattern is a handful of SQL statements, so an ORM would add
 indirection without buying anything (see PLAN.md "Deliberate cuts").
 """
+import logging
+
 import psycopg
 from psycopg.rows import dict_row
 
 from tracker.config import DATABASE_URL
 
+logger = logging.getLogger(__name__)
+
 
 def get_connection():
-    return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+    try:
+        conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+    except Exception:
+        logger.exception("Failed to connect to database")
+        raise
+    logger.debug("Opened database connection")
+    return conn
 
 
 def apply_schema(conn=None):
@@ -23,6 +33,7 @@ def apply_schema(conn=None):
         with conn.cursor() as cur:
             cur.execute(ddl)
         conn.commit()
+        logger.info("Schema applied from %s", schema_path)
     finally:
         if owns_conn:
             conn.close()

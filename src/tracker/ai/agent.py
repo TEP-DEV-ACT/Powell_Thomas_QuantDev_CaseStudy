@@ -2,11 +2,15 @@
 tools — surfaced to the caller as `trace` so the answer is auditable against
 what was actually retrieved.
 """
+import logging
+
 import anthropic
 
 from tracker.ai.prompts import SYSTEM_PROMPT
 from tracker.ai.tools import build_tools
 from tracker.config import ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, ANTHROPIC_MODEL
+
+logger = logging.getLogger(__name__)
 
 MAX_ITERATIONS = 10
 MAX_TOKENS = 1500
@@ -36,6 +40,7 @@ def _extract_citations(trace: list) -> list[dict]:
 
 
 def ask(question: str) -> dict:
+    logger.info("AI chat: question=%r", question)
     trace: list = []
     tools = build_tools(trace)
     runner = _client().beta.messages.tool_runner(
@@ -48,4 +53,9 @@ def ask(question: str) -> dict:
     )
     final = runner.until_done()
     answer = "".join(block.text for block in final.content if block.type == "text")
-    return {"answer": answer, "trace": trace, "citations": _extract_citations(trace)}
+    citations = _extract_citations(trace)
+    logger.info(
+        "AI chat: answered in %d chars, %d tool calls, %d citations",
+        len(answer), len(trace), len(citations),
+    )
+    return {"answer": answer, "trace": trace, "citations": citations}

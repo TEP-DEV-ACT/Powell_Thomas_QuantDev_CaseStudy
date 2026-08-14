@@ -2,8 +2,12 @@
 table. Shared by edgar_facts.py and edgar_filings.py so CIK resolution lives
 in exactly one place — adding a ticker to config.UNIVERSE is enough.
 """
+import logging
+
 from tracker.config import UNIVERSE
 from tracker.ingest._http import get, sec_session
+
+logger = logging.getLogger(__name__)
 
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
@@ -21,7 +25,9 @@ def resolve_ciks(session=None) -> dict:
             resolved[ticker] = (row["cik_str"], row["title"])
     missing = wanted - resolved.keys()
     if missing:
+        logger.error("Could not resolve CIK for tickers: %s", missing)
         raise ValueError(f"Could not resolve CIK for tickers: {missing}")
+    logger.info("Resolved %d tickers to CIKs", len(resolved))
     return resolved
 
 
@@ -56,4 +62,5 @@ def upsert_companies(conn, session=None) -> dict:
                 },
             )
     conn.commit()
+    logger.info("Upserted %d companies", len(resolved))
     return resolved

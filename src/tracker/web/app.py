@@ -1,11 +1,13 @@
 from flask import Flask
 
+from tracker.logging_config import configure_logging
 from tracker.web.jsonutil import TrackerJSONProvider
 from tracker.web.routes_api import api
 from tracker.web.routes_ui import ui
 
 
 def create_app() -> Flask:
+    configure_logging()
     app = Flask(__name__)
     app.json = TrackerJSONProvider(app)
     app.register_blueprint(ui)

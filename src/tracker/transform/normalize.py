@@ -12,8 +12,13 @@ list once per company and upserts the result.
 
 Run: python -m tracker.transform.normalize
 """
+import logging
+
 from tracker.db.session import get_connection
+from tracker.logging_config import configure_logging
 from tracker.transform.concepts import CONCEPT_CHAINS, FUNDAMENTALS_COLUMNS
+
+logger = logging.getLogger(__name__)
 
 UNIT_BY_CONCEPT = {
     "revenue": "USD",
@@ -145,10 +150,11 @@ def run():
             companies = cur.fetchall()
         for company in companies:
             n = normalize_company(conn, company["ticker"], company["cik"])
-            print(f"{company['ticker']}: {n} fiscal-year rows normalized")
+            logger.info("%s: %d fiscal-year rows normalized", company["ticker"], n)
     finally:
         conn.close()
 
 
 if __name__ == "__main__":
+    configure_logging()
     run()

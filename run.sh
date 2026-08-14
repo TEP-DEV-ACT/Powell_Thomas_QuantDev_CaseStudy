@@ -13,4 +13,7 @@ else
     echo "Database already has data — skipping seed load."
 fi
 
-exec gunicorn --bind 0.0.0.0:${FLASK_PORT:-8000} --workers 2 tracker.web.app:app
+# Single worker: the /logs page's in-memory buffer is per-process, so more
+# than one worker would make it show a different, inconsistent slice of
+# history depending on which worker happened to handle each request.
+exec gunicorn --bind 0.0.0.0:${FLASK_PORT:-8000} --workers 1 tracker.web.app:app

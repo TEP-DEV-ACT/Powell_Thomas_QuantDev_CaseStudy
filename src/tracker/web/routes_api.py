@@ -1,9 +1,12 @@
 """JSON API — direct reads over the metrics layer. No ingestion is ever
 triggered from a web request; the dashboard runs entirely off stored data.
 """
+import csv
+import functools
+import io
 import logging
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request
 
 from tracker.ai.agent import ask as ask_agent
 from tracker.config import UNIVERSE
@@ -21,6 +24,24 @@ api = Blueprint("api", __name__, url_prefix="/api")
 # enforced server-side; the system prompt is never client-influenced.
 MAX_HISTORY_TURNS = 10
 MAX_HISTORY_CHARS = 4000
+
+
+def _json_errors(view):
+    """Turn an unhandled exception in a route (DB outage, bad query, a
+    metrics function raising on unexpected data) into a clean 500 JSON body
+    instead of Flask's default HTML error page or a leaked stack trace —
+    every route in this module is a JSON API, so its failures should be too.
+    Routes that need a more specific status/message (e.g. /ask's 502 for an
+    agent error, the 404s for an unknown ticker) still handle those cases
+    explicitly before this ever triggers."""
+    @functools.wraps(view)
+    def wrapper(*args, **kwargs):
+        try:
+            return view(*args, **kwargs)
+        except Exception:
+            logger.exception("%s failed", view.__name__)
+            return jsonify({"error": "internal server error"}), 500
+    return wrapper
 
 
 def _clean_history(raw) -> list[dict]:
@@ -65,6 +86,7 @@ def _clean_history(raw) -> list[dict]:
 
 
 @api.get("/companies")
+@_json_errors
 def companies():
     logger.info("GET /api/companies")
     conn = get_connection()
@@ -78,6 +100,7 @@ def companies():
 
 
 @api.get("/fundamentals/<ticker>")
+@_json_errors
 def fundamentals(ticker: str):
     ticker = ticker.upper()
     years = request.args.get("years", type=int)
@@ -89,6 +112,7 @@ def fundamentals(ticker: str):
 
 
 @api.get("/compare")
+@_json_errors
 def compare():
     metric = request.args.get("metric")
     fiscal_year = request.args.get("fiscal_year", type=int)
@@ -99,6 +123,7 @@ def compare():
 
 
 @api.get("/valuation/<ticker>")
+@_json_errors
 def valuation(ticker: str):
     ticker = ticker.upper()
     logger.info("GET /api/valuation/%s", ticker)
@@ -113,6 +138,7 @@ def valuation(ticker: str):
 
 
 @api.get("/capex/<ticker>")
+@_json_errors
 def capex(ticker: str):
     ticker = ticker.upper()
     logger.info("GET /api/capex/%s", ticker)
@@ -123,6 +149,7 @@ def capex(ticker: str):
 
 
 @api.get("/prices/<ticker>")
+@_json_errors
 def prices(ticker: str):
     ticker = ticker.upper()
     days = request.args.get("days", default=365, type=int)
@@ -148,6 +175,43 @@ def prices(ticker: str):
     return jsonify(rows)
 
 
+@api.get("/prices/<ticker>.csv")
+@_json_errors
+def prices_csv(ticker: str):
+    ticker = ticker.upper()
+    days = request.args.get("days", default=365, type=int)
+    logger.info("GET /api/prices/%s.csv days=%d", ticker, days)
+    if ticker not in UNIVERSE:
+        logger.warning("prices_csv: unknown ticker %s", ticker)
+        return jsonify({"error": f"unknown ticker: {ticker}"}), 404
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT trade_date, open, high, low, close, volume FROM prices
+                WHERE ticker = %(ticker)s
+                ORDER BY trade_date DESC LIMIT %(days)s
+                """,
+                {"ticker": ticker, "days": days},
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+    rows.reverse()
+
+    fieldnames = ["trade_date", "open", "high", "low", "close", "volume"]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(rows)
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{ticker}_price.csv"'},
+    )
+
+
 @api.post("/ask")
 def ask():
     payload = request.get_json(silent=True) or {}
@@ -169,6 +233,7 @@ def ask():
 
 
 @api.get("/filings/<ticker>")
+@_json_errors
 def filings(ticker: str):
     ticker = ticker.upper()
     logger.info("GET /api/filings/%s", ticker)

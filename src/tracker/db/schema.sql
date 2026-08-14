@@ -53,10 +53,20 @@ CREATE TABLE IF NOT EXISTS fundamentals (
     capex_tag           TEXT,
     operating_cash_flow NUMERIC,
     operating_cash_flow_tag TEXT,
+    nonoperating_income NUMERIC,
+    nonoperating_income_tag TEXT,
     source_accn         TEXT,
     filed_at            DATE,
     UNIQUE (ticker, fiscal_year)
 );
+
+-- Added after the initial schema — CREATE TABLE IF NOT EXISTS above won't run
+-- again against an existing database, so new columns need an explicit,
+-- idempotent ALTER (see PLAN.md "no migration framework").
+ALTER TABLE fundamentals ADD COLUMN IF NOT EXISTS nonoperating_income NUMERIC;
+ALTER TABLE fundamentals ADD COLUMN IF NOT EXISTS nonoperating_income_tag TEXT;
+ALTER TABLE fundamentals ADD COLUMN IF NOT EXISTS income_tax_expense NUMERIC;
+ALTER TABLE fundamentals ADD COLUMN IF NOT EXISTS income_tax_expense_tag TEXT;
 
 CREATE TABLE IF NOT EXISTS prices (
     id          BIGSERIAL PRIMARY KEY,

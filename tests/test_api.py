@@ -1,6 +1,7 @@
 """Endpoint smoke tests against the (seeded) database — no network calls."""
 import pytest
 
+from tracker.web import routes_api
 from tracker.web.app import create_app
 
 
@@ -51,12 +52,32 @@ def test_compare_endpoint(client):
     assert rows == sorted(rows, key=lambda r: r["revenue"], reverse=True)
 
 
+def test_compare_endpoint_fcf_yield(client):
+    resp = client.get("/api/compare?metric=fcf_yield&fiscal_year=2024")
+    assert resp.status_code == 200
+    rows = resp.get_json()
+    assert len(rows) >= 1
+    assert rows == sorted(rows, key=lambda r: r["fcf_yield"], reverse=True)
+    assert "market_cap" in rows[0]
+    assert "price_as_of" in rows[0]
+
+
+def test_compare_endpoint_adjusted_net_income_margin(client):
+    resp = client.get("/api/compare?metric=adjusted_net_income_margin&fiscal_year=2024")
+    assert resp.status_code == 200
+    rows = resp.get_json()
+    assert len(rows) >= 1
+    assert rows == sorted(rows, key=lambda r: r["adjusted_net_income_margin"], reverse=True)
+
+
 def test_valuation_endpoint(client):
     resp = client.get("/api/valuation/AAPL")
     assert resp.status_code == 200
     body = resp.get_json()
     assert "trailing_pe" in body
     assert "trailing_ps" in body
+    assert "market_cap" in body
+    assert "fcf_yield" in body
 
 
 def test_capex_endpoint(client):
@@ -74,12 +95,55 @@ def test_prices_endpoint(client):
     assert 0 < len(rows) <= 30
 
 
+def test_prices_csv_endpoint(client):
+    resp = client.get("/api/prices/NVDA.csv?days=5")
+    assert resp.status_code == 200
+    assert resp.mimetype == "text/csv"
+    assert 'attachment; filename="NVDA_price.csv"' in resp.headers["Content-Disposition"]
+    lines = resp.data.decode().strip().splitlines()
+    assert lines[0] == "trade_date,open,high,low,close,volume"
+    assert 1 <= len(lines) - 1 <= 5
+
+
+def test_prices_csv_endpoint_rejects_unknown_ticker(client):
+    resp = client.get("/api/prices/ZZZZ.csv")
+    assert resp.status_code == 404
+
+
+def test_prices_endpoint_json_not_shadowed_by_csv_route(client):
+    resp = client.get("/api/prices/NVDA?days=5")
+    assert resp.status_code == 200
+    assert resp.mimetype == "application/json"
+
+
 def test_filings_endpoint(client):
     resp = client.get("/api/filings/ETN")
     assert resp.status_code == 200
     rows = resp.get_json()
     assert len(rows) >= 1
     assert all(row["primary_doc_url"].startswith("https://www.sec.gov/") for row in rows)
+
+
+def test_fundamentals_endpoint_returns_clean_500_on_backend_failure(client, monkeypatch):
+    # A DB outage (or any unexpected exception) inside a route must come back
+    # as JSON, not Flask's default HTML error page or a leaked stack trace.
+    def boom(*args, **kwargs):
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(routes_api, "get_fundamentals", boom)
+    resp = client.get("/api/fundamentals/AAPL")
+    assert resp.status_code == 500
+    assert resp.get_json() == {"error": "internal server error"}
+
+
+def test_compare_endpoint_returns_clean_500_on_backend_failure(client, monkeypatch):
+    def boom(*args, **kwargs):
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(routes_api, "compare_companies", boom)
+    resp = client.get("/api/compare?metric=revenue&fiscal_year=2024")
+    assert resp.status_code == 500
+    assert resp.get_json() == {"error": "internal server error"}
 
 
 def test_ask_endpoint_requires_question(client):

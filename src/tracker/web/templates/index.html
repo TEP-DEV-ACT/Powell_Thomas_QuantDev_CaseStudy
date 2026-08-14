@@ -5,9 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fundamentals Tracker</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-<!-- SheetJS backs the "Download → Excel" action on every table card. Same
-     CDN-only posture as Plotly above: this project has no JS build step. -->
+<!-- SheetJS backs the "Download → Excel" action on every card (table and
+     chart alike). Same CDN-only posture as Plotly above: this project has no
+     JS build step. -->
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<!-- html2canvas backs the "Download → PNG/JPEG" action on table cards —
+     Plotly renders its own image export for chart cards, but a data table has
+     no built-in rasterizer, so this gives it the same two image formats. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -66,7 +71,7 @@
         </div>
       </section>
 
-      <section class="card" data-card="price" data-kind="chart"
+      <section class="card" data-card="price" data-kind="chart" data-csv="1"
                data-target="price-chart" data-title="Price">
         <header class="card-head">
           <h2>Price <span class="muted" id="valuation-summary"></span></h2>
@@ -105,14 +110,15 @@
                data-scope="universe"
                data-target="compare-chart" data-title="Cross-company compare">
         <header class="card-head">
-          <h2>Cross-company compare <span class="muted">per-share and margin figures — absolute dollars would just rank by size. Share counts are as-reported, so pre-split years read high (GOOGL 20:1 in 2022, NVDA 10:1 in FY2025, AAPL 4:1 in 2020).</span></h2>
+          <h2>Cross-company compare <span class="muted">margins and yields — absolute dollars would just rank by size. FCF yield is free cash flow against today's market cap (latest close &times; latest reported diluted shares), so it reads the selected fiscal year's cash generation at today's valuation, not a point-in-time historical yield.</span></h2>
         </header>
         <div class="card-body">
           <div class="compare-controls">
             <select id="compare-metric">
-              <option value="revenue_per_share">Revenue / share</option>
-              <option value="net_income_per_share">Net income / share</option>
-              <option value="fcf_per_share">Free cash flow / share</option>
+              <option value="net_income_margin">Net income margin</option>
+              <option value="adjusted_net_income_margin">Adjusted net income margin</option>
+              <option value="fcf_margin">FCF margin</option>
+              <option value="fcf_yield">FCF yield</option>
               <option value="gross_margin">Gross margin</option>
               <option value="operating_margin">Operating margin</option>
             </select>

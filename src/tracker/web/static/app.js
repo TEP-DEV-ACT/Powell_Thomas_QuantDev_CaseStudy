@@ -97,24 +97,41 @@ function deltaSpan(v, decimals = 1, isBps = false, swingThreshold = 1.0) {
 // charted or summed.
 const FUNDAMENTAL_METRICS = [
   { key: "revenue", label: "Revenue ($M)", fmt: fmtMillions, yoyKey: "revenue_yoy",
-    xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "Revenue YoY", yoyFmt: "0.0%" },
+    xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "Revenue YoY", yoyFmt: "0.0%",
+    tip: "As-reported annual revenue from the 10-K, taken from whichever XBRL revenue tag the company uses (RevenueFromContractWithCustomerExcludingAssessedTax, Revenues, or a similar fallback)." },
   { key: "net_income", label: "Net income ($M)", fmt: fmtMillions, yoyKey: "net_income_yoy",
-    xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "Net income YoY", yoyFmt: "0.0%" },
+    xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "Net income YoY", yoyFmt: "0.0%",
+    tip: "As-reported GAAP net income for the fiscal year, from the NetIncomeLoss (or ProfitLoss) XBRL tag." },
+  // No YoY on this row — it's the adjustment itself (an as-reported non-
+  // operating swing), not a metric that's meaningful to grow/shrink YoY.
+  { key: "other_income_adjustments", label: "Other income adjustments ($M)", fmt: fmtMillions,
+    yoyKey: null, xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "", yoyFmt: "",
+    tip: "The pre-tax 'Other income (expense), net' line from the income statement, which can bundle equity-investment gains/losses with interest income/expense — this is what Adjusted net income backs out below." },
+  { key: "adjusted_net_income", label: "Adjusted net income ($M)", fmt: fmtMillions,
+    yoyKey: "adjusted_net_income_yoy",
+    xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "Adjusted net income YoY", yoyFmt: "0.0%",
+    tip: "Net income with Other income adjustments backed out at the company's own effective tax rate for the year (income tax expense divided by pretax income), so a one-off investment gain or loss doesn't read as a change in operating performance." },
   { key: "eps_diluted", label: "Diluted EPS", fmt: v => v == null ? "—" : Number(v).toFixed(2),
     yoyKey: "eps_diluted_yoy", swingThreshold: 0.5,
-    xlsScale: 1, xlsFmt: "0.00", yoyLabel: "Diluted EPS YoY", yoyFmt: "0.0%" },
+    xlsScale: 1, xlsFmt: "0.00", yoyLabel: "Diluted EPS YoY", yoyFmt: "0.0%",
+    tip: "As-reported GAAP diluted earnings per share for the fiscal year, from the EarningsPerShareDiluted XBRL tag." },
   { key: "gross_margin", label: "Gross margin", fmt: v => fmtPct(v),
     yoyKey: "gross_margin_delta_bps", isBps: true,
-    xlsScale: 1, xlsFmt: "0.0%", yoyLabel: "Gross margin Δ (bps)", yoyFmt: "0" },
+    xlsScale: 1, xlsFmt: "0.0%", yoyLabel: "Gross margin Δ (bps)", yoyFmt: "0",
+    tip: "Gross profit divided by revenue, where gross profit is either reported directly or derived as revenue minus cost of revenue for filers that don't report a gross profit subtotal." },
   { key: "operating_margin", label: "Operating margin", fmt: v => fmtPct(v),
     yoyKey: "operating_margin_delta_bps", isBps: true,
-    xlsScale: 1, xlsFmt: "0.0%", yoyLabel: "Operating margin Δ (bps)", yoyFmt: "0" },
+    xlsScale: 1, xlsFmt: "0.0%", yoyLabel: "Operating margin Δ (bps)", yoyFmt: "0",
+    tip: "Operating income divided by revenue, from the OperatingIncomeLoss XBRL tag divided by reported revenue." },
   { key: "free_cash_flow", label: "Free cash flow ($M)", fmt: fmtMillions, yoyKey: "free_cash_flow_yoy",
-    xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "Free cash flow YoY", yoyFmt: "0.0%" },
+    xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "Free cash flow YoY", yoyFmt: "0.0%",
+    tip: "Cash from operating activities minus capital expenditure, both taken directly from the reported cash flow statement." },
 ];
 
-// Populated by renderFundamentalsTable; read by the copy/download toolbar.
-const TABLE_EXPORTS = {};
+// Populated by every card's render function (table and chart alike) with the
+// same { sheetName, aoa, rowFormats|colFormats } shape; read by the
+// copy/download toolbar so Excel export works identically everywhere.
+const CARD_EXPORTS = {};
 
 function renderFundamentalsTable(rows) {
   const recent = rows.slice(-5);
@@ -130,7 +147,7 @@ function renderFundamentalsTable(rows) {
   const periodRow = ["Period end", ...recent.map(r => r.period_end ?? null)];
 
   for (const m of FUNDAMENTAL_METRICS) {
-    html += `<tr><td>${m.label}</td>`;
+    html += `<tr><td>${m.label} <span class="info-icon" title="${m.tip}">ⓘ</span></td>`;
     const values = [];
     const deltas = [];
     for (const row of recent) {
@@ -142,16 +159,22 @@ function renderFundamentalsTable(rows) {
     }
     html += "</tr>";
     // Each YoY gets its own spreadsheet row rather than sharing a cell with
-    // the level, so both columns stay numeric.
-    aoa.push([m.label, ...values], [m.yoyLabel, ...deltas]);
-    rowFormats.push(m.xlsFmt, m.yoyFmt);
+    // the level, so both columns stay numeric. Metrics with no YoY key (e.g.
+    // other_income_adjustments — an adjustment, not something meaningful to
+    // grow/shrink) skip that row instead of exporting an all-blank one.
+    aoa.push([m.label, ...values]);
+    rowFormats.push(m.xlsFmt);
+    if (m.yoyKey) {
+      aoa.push([m.yoyLabel, ...deltas]);
+      rowFormats.push(m.yoyFmt);
+    }
   }
   html += "</tbody></table>";
   document.getElementById("fundamentals-table").innerHTML = html;
 
   aoa.splice(1, 0, periodRow);
   rowFormats.splice(1, 0, null);
-  TABLE_EXPORTS.fundamentals = { sheetName: "Fundamentals", aoa, rowFormats };
+  CARD_EXPORTS.fundamentals = { sheetName: "Fundamentals", aoa, rowFormats };
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +183,11 @@ function renderFundamentalsTable(rows) {
 
 function renderPriceChart(ticker, prices, fundamentals) {
   const chart = document.getElementById("price-chart");
+  CARD_EXPORTS.price = {
+    sheetName: "Price",
+    aoa: [["Date", "Close"], ...prices.map(p => [p.trade_date, p.close])],
+    colFormats: [null, "0.00"],
+  };
   if (!prices.length) {
     Plotly.purge(chart);
     chart.innerHTML = `<p class="muted">No price history for ${ticker}.</p>`;
@@ -215,6 +243,11 @@ function renderCapexIntensityChart(series) {
   // Gaps in the underlying capex tag (see DESIGN.md known limitations, e.g.
   // NVDA FY2012-2023) are dropped rather than drawn as zero-height bars.
   const present = series.filter(s => s.capex_intensity != null);
+  CARD_EXPORTS["capex-intensity"] = {
+    sheetName: "Capex intensity",
+    aoa: [["Fiscal year", "Capex intensity"], ...present.map(s => [`FY${s.fiscal_year}`, s.capex_intensity])],
+    colFormats: [null, "0.0%"],
+  };
   const trace = {
     x: present.map(s => `FY${s.fiscal_year}`),
     y: present.map(s => s.capex_intensity),
@@ -234,6 +267,12 @@ function renderCapexCycleChart(series) {
   // showing the company's gap years as empty stretches instead of skipping them.
   const present = series.filter(s => s.capex_yoy != null);
   const years = present.map(s => `FY${s.fiscal_year}`);
+  CARD_EXPORTS["capex-cycle"] = {
+    sheetName: "Capex cycle",
+    aoa: [["Fiscal year", "Company capex YoY", "National capex YoY"],
+          ...present.map(s => [`FY${s.fiscal_year}`, s.capex_yoy, s.macro_capex_yoy])],
+    colFormats: [null, "0.0%", "0.0%"],
+  };
   const traces = [
     {
       x: years, y: present.map(s => s.capex_yoy), type: "scatter", mode: "lines+markers",
@@ -276,6 +315,11 @@ async function renderCapexScatter() {
       points.push({ ticker: r.ticker, x: lastFund.revenue_yoy, y: lastCapex.capex_intensity });
     }
   }
+  CARD_EXPORTS["capex-scatter"] = {
+    sheetName: "Capex vs revenue growth",
+    aoa: [["Ticker", "Revenue YoY", "Capex intensity"], ...points.map(p => [p.ticker, p.x, p.y])],
+    colFormats: [null, "0.0%", "0.0%"],
+  };
   const trace = {
     x: points.map(p => p.x), y: points.map(p => p.y), text: points.map(p => p.ticker),
     mode: "markers+text", type: "scatter", textposition: "top center",
@@ -310,11 +354,21 @@ async function loadTicker(ticker) {
   currentTicker = ticker;
   document.querySelectorAll(".ticker-btn").forEach(b => b.classList.toggle("active", b.dataset.ticker === ticker));
 
-  const [fundamentals, prices, capex] = await Promise.all([
-    getJSON(`/api/fundamentals/${ticker}`),
-    getJSON(`/api/prices/${ticker}?days=${PRICE_WINDOW_ROWS}`),
-    getJSON(`/api/capex/${ticker}`),
-  ]);
+  let fundamentals, prices, capex;
+  try {
+    [fundamentals, prices, capex] = await Promise.all([
+      getJSON(`/api/fundamentals/${ticker}`),
+      getJSON(`/api/prices/${ticker}?days=${PRICE_WINDOW_ROWS}`),
+      getJSON(`/api/capex/${ticker}`),
+    ]);
+  } catch (e) {
+    // A silent failure here would leave the previous ticker's charts on
+    // screen looking current when they aren't, or nothing at all after the
+    // ticker buttons have already switched — surface it instead.
+    console.error(`loadTicker(${ticker}) failed`, e);
+    toast(`Couldn't load data for ${ticker} — try again in a moment.`);
+    return;
+  }
 
   renderFundamentalsTable(fundamentals);
   renderPriceChart(ticker, prices, fundamentals);
@@ -331,12 +385,33 @@ function populateCompareYears(fundamentals) {
   loadCompareChart();
 }
 
+// Every compare option is a ratio now (margin or yield), not a dollar
+// figure, but fcf_yield's values sit in the low single-digit percent range
+// where ".0%" rounds to 0 — give it an extra decimal.
+const COMPARE_FORMATS = {
+  fcf_yield: { hover: "%{y:.2%}<extra></extra>", tick: ".2%" },
+};
+const DEFAULT_COMPARE_FORMAT = { hover: "%{y:.1%}<extra></extra>", tick: ".0%" };
+
 async function loadCompareChart() {
   const metric = document.getElementById("compare-metric").value;
   const year = document.getElementById("compare-year").value;
   if (!year) return;
-  const rows = await getJSON(`/api/compare?metric=${metric}&fiscal_year=${year}`);
-  const isPct = metric.includes("margin");
+  let rows;
+  try {
+    rows = await getJSON(`/api/compare?metric=${metric}&fiscal_year=${year}`);
+  } catch (e) {
+    console.error("loadCompareChart failed", e);
+    toast("Couldn't load the comparison chart — try again in a moment.");
+    return;
+  }
+  const fmt = COMPARE_FORMATS[metric] || DEFAULT_COMPARE_FORMAT;
+  const metricLabel = document.getElementById("compare-metric").selectedOptions[0].text;
+  CARD_EXPORTS.compare = {
+    sheetName: "Cross-company compare",
+    aoa: [["Ticker", metricLabel], ...rows.map(r => [r.ticker, r[metric]])],
+    colFormats: [null, metric === "fcf_yield" ? "0.00%" : "0.0%"],
+  };
   const trace = {
     x: rows.map(r => r.ticker), y: rows.map(r => r[metric]), type: "bar",
     // Half-slot bars in category units, so a year with only two reporting
@@ -345,12 +420,10 @@ async function loadCompareChart() {
     // Keyed on the ticker, not the bar index, so a company keeps its colour
     // as the ranking reshuffles between metrics and fiscal years.
     marker: { color: rows.map(r => TICKER_COLORS[r.ticker]) },
-    hovertemplate: isPct ? "%{y:.1%}<extra></extra>" : "$%{y:,.2f}<extra></extra>",
+    hovertemplate: fmt.hover,
   };
   Plotly.newPlot("compare-chart", [trace], baseLayout({
-    yaxis: Object.assign({}, AXIS_STYLE, isPct
-      ? { tickformat: ".0%" }
-      : { tickprefix: "$", tickformat: ",.2f" }),
+    yaxis: Object.assign({}, AXIS_STYLE, { tickformat: fmt.tick }),
     showlegend: false,
   }), PLOT_CONFIG);
 }
@@ -368,12 +441,19 @@ const ICONS = {
 
 function buildCardTools() {
   for (const card of document.querySelectorAll("[data-card]")) {
-    const isChart = card.dataset.kind === "chart";
     const title = card.dataset.title;
-    const items = isChart
-      ? '<button type="button" data-act="download" data-format="png">PNG image</button>' +
-        '<button type="button" data-act="download" data-format="jpeg">JPEG image</button>'
-      : '<button type="button" data-act="download" data-format="xlsx">Excel (.xlsx)</button>';
+    // Every card — table or chart — offers the same three formats, backed by
+    // the same download logic below (CARD_EXPORTS for xlsx, html2canvas or
+    // Plotly for the images) so none of them drift out of sync.
+    let items =
+      '<button type="button" data-act="download" data-format="xlsx">Excel (.xlsx)</button>' +
+      '<button type="button" data-act="download" data-format="png">PNG image</button>' +
+      '<button type="button" data-act="download" data-format="jpeg">JPEG image</button>';
+    // Opt-in per card — only the price card has an underlying raw endpoint
+    // worth exporting as CSV on top of the three universal formats.
+    if (card.dataset.csv) {
+      items += '<button type="button" data-act="download" data-format="csv">Data (.csv)</button>';
+    }
 
     const tools = document.createElement("div");
     tools.className = "card-tools";
@@ -420,12 +500,14 @@ function exportBaseName(card) {
   return `${card.dataset.scope === "universe" ? "universe" : currentTicker}_${id}`;
 }
 
-function plotOf(card) {
+// The element a card's toolbar actions act on — a Plotly div for charts, the
+// rendered <table>'s container for tables.
+function cardTarget(card) {
   return document.getElementById(card.dataset.target);
 }
 
-function tableSpec(card) {
-  const spec = TABLE_EXPORTS[card.dataset.card];
+function cardExportSpec(card) {
+  const spec = CARD_EXPORTS[card.dataset.card];
   if (!spec) throw new Error("no data loaded yet");
   return spec;
 }
@@ -437,11 +519,11 @@ function aoaToTsv(aoa) {
 async function copyCard(card, btn) {
   try {
     if (card.dataset.kind === "chart") {
-      const dataUrl = await Plotly.toImage(plotOf(card), { format: "png", scale: 2 });
+      const dataUrl = await Plotly.toImage(cardTarget(card), { format: "png", scale: 2 });
       const blob = await (await fetch(dataUrl)).blob();
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
     } else {
-      const spec = tableSpec(card);
+      const spec = cardExportSpec(card);
       const tsv = aoaToTsv(spec.aoa);
       const table = card.querySelector("table");
       try {
@@ -464,27 +546,80 @@ async function copyCard(card, btn) {
   }
 }
 
-function downloadCard(card, format) {
-  const name = exportBaseName(card);
-  if (format === "xlsx") {
-    const spec = tableSpec(card);
-    const ws = XLSX.utils.aoa_to_sheet(spec.aoa);
-    // Formats are applied per row so Excel shows percentages as percentages
-    // while the underlying cell stays a number you can chart or average.
+// Applies a spec's number formats to a freshly built worksheet. Fundamentals
+// is row-oriented (one metric per row, a value per fiscal year), so its
+// format varies by row; every chart export is column-oriented (one field per
+// column, a value per record), so its format varies by column. A spec
+// carries exactly one of the two.
+function applyFormats(ws, spec) {
+  const nRows = spec.aoa.length;
+  const nCols = spec.aoa[0].length;
+  if (spec.rowFormats) {
     spec.rowFormats.forEach((z, r) => {
       if (!z) return;
-      for (let c = 1; c < spec.aoa[r].length; c++) {
+      for (let c = 1; c < nCols; c++) {
         const cell = ws[XLSX.utils.encode_cell({ r, c })];
         if (cell && cell.t === "n") cell.z = z;
       }
     });
+  } else if (spec.colFormats) {
+    spec.colFormats.forEach((z, c) => {
+      if (!z) return;
+      for (let r = 1; r < nRows; r++) {
+        const cell = ws[XLSX.utils.encode_cell({ r, c })];
+        if (cell && cell.t === "n") cell.z = z;
+      }
+    });
+  }
+}
+
+// Chart cards rasterize via Plotly's own exporter; table cards have no
+// built-in one, so html2canvas shoots the same element the toolbar sits on
+// top of. Both land on the same {name}.{format} naming as the xlsx/csv paths.
+async function downloadTableImage(card, format, name) {
+  try {
+    const canvas = await html2canvas(cardTarget(card), { backgroundColor: PALETTE.surface, scale: 2 });
+    const mime = format === "jpeg" ? "image/jpeg" : "image/png";
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL(mime, 0.92);
+    a.download = `${name}.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch (e) {
+    console.warn("table image export failed", e);
+    toast(`Download failed: ${e.message}`);
+  }
+}
+
+async function downloadCard(card, format) {
+  const name = exportBaseName(card);
+  if (format === "csv") {
+    // Content-Disposition: attachment means this never navigates the page.
+    const a = document.createElement("a");
+    a.href = `/api/prices/${currentTicker}.csv?days=${PRICE_WINDOW_ROWS}`;
+    a.download = `${name}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return;
+  }
+  if (format === "xlsx") {
+    const spec = cardExportSpec(card);
+    const ws = XLSX.utils.aoa_to_sheet(spec.aoa);
+    applyFormats(ws, spec);
     ws["!cols"] = spec.aoa[0].map((_, i) => ({ wch: i === 0 ? 26 : 14 }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, spec.sheetName);
     XLSX.writeFile(wb, `${name}.xlsx`);
     return;
   }
-  Plotly.downloadImage(plotOf(card), { format, scale: 2, filename: name });
+  // png / jpeg
+  if (card.dataset.kind === "chart") {
+    Plotly.downloadImage(cardTarget(card), { format, scale: 2, filename: name });
+  } else {
+    await downloadTableImage(card, format, name);
+  }
 }
 
 function toggleFullscreen(card) {

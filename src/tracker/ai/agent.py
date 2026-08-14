@@ -52,15 +52,35 @@ def ask(question: str, history: list[dict] | None = None) -> dict:
     logger.info("AI chat: question=%r history=%d turns", question, len(history or []))
     trace: list = []
     tools = build_tools(trace)
-    runner = _client().beta.messages.tool_runner(
-        model=ANTHROPIC_MODEL,
-        max_tokens=MAX_TOKENS,
-        system=SYSTEM_PROMPT,
-        messages=[*(history or []), {"role": "user", "content": question}],
-        tools=tools,
-        max_iterations=MAX_ITERATIONS,
-    )
-    final = runner.until_done()
+    # Individual tool failures are already caught and turned into structured
+    # {"error": ...} results inside build_tools (ai/tools.py) so a single bad
+    # DB read doesn't abort the turn. What's caught here is everything
+    # outside that: the Anthropic API call itself (auth, rate limit, network,
+    # a malformed model response) — distinguished so the caller (routes_api
+    # /api/ask) can show something more useful than a raw exception string.
+    try:
+        runner = _client().beta.messages.tool_runner(
+            model=ANTHROPIC_MODEL,
+            max_tokens=MAX_TOKENS,
+            system=SYSTEM_PROMPT,
+            messages=[*(history or []), {"role": "user", "content": question}],
+            tools=tools,
+            max_iterations=MAX_ITERATIONS,
+        )
+        final = runner.until_done()
+    except anthropic.RateLimitError as exc:
+        logger.warning("AI chat: rate limited: %s", exc)
+        raise RuntimeError("The AI service is rate-limited right now — please try again shortly.") from exc
+    except anthropic.APIConnectionError as exc:
+        logger.error("AI chat: could not reach the AI service: %s", exc)
+        raise RuntimeError("Could not reach the AI service — check the network/proxy configuration.") from exc
+    except anthropic.APIStatusError as exc:
+        logger.error("AI chat: AI service returned an error: %s", exc)
+        raise RuntimeError(f"The AI service returned an error (status {exc.status_code}).") from exc
+    except anthropic.APIError as exc:
+        logger.exception("AI chat: unexpected Anthropic API error")
+        raise RuntimeError("The AI service failed unexpectedly.") from exc
+
     answer = "".join(block.text for block in final.content if block.type == "text")
     citations = _extract_citations(trace)
     logger.info(

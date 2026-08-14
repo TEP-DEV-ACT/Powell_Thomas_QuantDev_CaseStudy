@@ -22,7 +22,8 @@ Anthropic API.
 The dashboard is two columns: a collapsible chat rail on the left, and the charts and tables on
 the right. Every chart and table is its own card with a hover toolbar — **copy** (chart to the
 clipboard as a PNG, table as a pasteable grid), **download** (PNG/JPEG for charts, `.xlsx` with
-typed numeric cells for tables) and **fullscreen**.
+typed numeric cells for tables, plus `.csv` of the full OHLCV series on the Price card) and
+**fullscreen**.
 
 To re-run **live** ingestion against the real sources (proves the wiring is real, not just the
 seed):

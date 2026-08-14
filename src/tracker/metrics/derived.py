@@ -2,8 +2,8 @@
 ordered series of reported rows.
 """
 
-YOY_FIELDS = ["revenue", "net_income", "eps_diluted", "free_cash_flow"]
-MARGIN_FIELDS = ["gross_margin", "operating_margin"]
+YOY_FIELDS = ["revenue", "net_income", "eps_diluted", "free_cash_flow", "adjusted_net_income"]
+MARGIN_FIELDS = ["gross_margin", "operating_margin", "net_income_margin", "fcf_margin", "adjusted_net_income_margin"]
 
 
 def yoy_growth(current: float | None, previous: float | None) -> float | None:

@@ -31,28 +31,52 @@ def build_tools(trace: list) -> list:
         logger.info("AI tool call: %s input=%s", name, tool_input)
         trace.append({"tool": name, "input": tool_input, "result": result})
 
+    def _safe(name: str, tool_input: dict, fn, *args, **kwargs):
+        """Run a tool's underlying data fetch, turning any exception (DB
+        outage, bad query, etc.) into a structured {"error": ...} result
+        instead of letting it propagate and abort the whole chat turn —
+        the system prompt already tells the model to say so plainly rather
+        than invent an answer when a tool errors (ai/prompts.py rule 3)."""
+        try:
+            result = fn(*args, **kwargs)
+        except Exception:
+            logger.exception("AI tool %s failed, input=%s", name, tool_input)
+            result = {"error": f"{name} failed due to an internal data error. Tell the user this specific lookup is unavailable right now rather than guessing."}
+        record(name, tool_input, result)
+        return _dump(result)
+
     @beta_tool
     def get_fundamentals(ticker: str, years: int = 5) -> str:
         """Reported and derived annual fundamentals for one company: revenue,
-        net income, diluted EPS, gross margin, operating margin, free cash
-        flow, the per-share variants of revenue/net income/free cash flow,
-        and each one's year-over-year change. Absolute dollar figures are in
-        whole US dollars as reported to EDGAR, not millions. Use this for
-        questions about a single company's reported numbers or growth over
-        time.
+        net income, diluted EPS, gross margin, operating margin, net income
+        margin, free cash flow, FCF margin, the per-share variants of
+        revenue/net income/free cash flow, and each one's year-over-year
+        change. Also includes other_income_adjustments (the pre-tax
+        non-operating income/expense embedded in net income — the as-reported
+        "other income (expense), net" line, which may also bundle in interest
+        income/expense for filers that don't tag it separately),
+        effective_tax_rate (income_tax_expense / pretax income for the year),
+        adjusted_net_income (net income with that adjustment backed out at
+        the company's own effective tax rate, so an after-tax investment-marks
+        swing doesn't read as a change in operating performance), and
+        adjusted_net_income_margin. All are null for a fiscal year when no
+        source tag matched or the tax rate can't be derived — a real gap,
+        not a zero.
+        Absolute dollar figures are in whole US dollars as reported to EDGAR,
+        not millions. Use this for questions about a single company's
+        reported numbers or growth over time.
 
         Args:
             ticker: Stock ticker — one of NVDA, MSFT, AAPL, GOOGL, ETN.
             years: How many of the most recent fiscal years to return.
         """
         ticker = ticker.upper()
-        result = (
-            {"error": f"unknown ticker {ticker}, must be one of {UNIVERSE}"}
-            if ticker not in UNIVERSE
-            else _get_fundamentals(ticker, years=years)
-        )
-        record("get_fundamentals", {"ticker": ticker, "years": years}, result)
-        return _dump(result)
+        tool_input = {"ticker": ticker, "years": years}
+        if ticker not in UNIVERSE:
+            result = {"error": f"unknown ticker {ticker}, must be one of {UNIVERSE}"}
+            record("get_fundamentals", tool_input, result)
+            return _dump(result)
+        return _safe("get_fundamentals", tool_input, _get_fundamentals, ticker, years=years)
 
     @beta_tool
     def compare_companies(metric: str, fiscal_year: int) -> str:
@@ -60,43 +84,53 @@ def build_tools(trace: list) -> list:
         single fiscal year, highest to lowest. Use this for "which company
         had the highest/lowest X" or any cross-company comparison.
 
-        Prefer the per-share or margin metrics for cross-company questions —
-        the absolute dollar metrics mostly just rank the companies by size.
-        Per-share figures divide by the as-reported diluted share count,
-        which EDGAR does not restate for stock splits, so a company's
-        per-share series steps sharply across its split years (GOOGL 20:1 in
-        2022, NVDA 10:1 in FY2025, AAPL 4:1 in 2020). Say so rather than
-        reading such a step as a change in performance.
+        Prefer the margin/yield metrics for cross-company questions — the
+        absolute dollar metrics mostly just rank the companies by size.
+        fcf_yield divides that fiscal year's free cash flow by *today's*
+        market cap (latest close x latest reported diluted shares), so it
+        answers "what would a buyer at today's price be getting on that
+        year's cash flow," not a point-in-time historical yield — say so if
+        the question implies the latter. The per-share metrics divide by the
+        as-reported diluted share count, which EDGAR does not restate for
+        stock splits, so a company's per-share series steps sharply across
+        its split years (GOOGL 20:1 in 2022, NVDA 10:1 in FY2025, AAPL 4:1 in
+        2020) — margins and yields are immune to this and should be preferred
+        when available.
 
         Args:
             metric: One of revenue, net_income, free_cash_flow, eps_diluted,
                 revenue_per_share, net_income_per_share, fcf_per_share,
-                gross_margin, operating_margin.
+                gross_margin, operating_margin, net_income_margin,
+                fcf_margin, fcf_yield.
             fiscal_year: The fiscal year to compare, e.g. 2024.
         """
-        result = _compare_companies(metric, fiscal_year)
-        record("compare_companies", {"metric": metric, "fiscal_year": fiscal_year}, result)
-        return _dump(result)
+        tool_input = {"metric": metric, "fiscal_year": fiscal_year}
+        return _safe("compare_companies", tool_input, _compare_companies, metric, fiscal_year)
 
     @beta_tool
     def get_valuation(ticker: str) -> str:
-        """Trailing P/E and trailing P/S for one company: the latest market
-        close joined against the most recently reported annual diluted EPS
-        and revenue. Both ratios are explicitly trailing; as-of dates for the
-        price and the EPS/revenue are included so staleness is visible. Use
-        this for any valuation/multiple question — never estimate a multiple
-        from memory.
+        """Trailing P/E, trailing P/S, market cap, and FCF yield for one
+        company: the latest market close joined against the most recently
+        reported annual diluted EPS, revenue, and free cash flow. All ratios
+        are explicitly trailing; as-of dates for the price and the
+        EPS/revenue/FCF are included so staleness is visible. Use this for
+        any valuation/multiple question — never estimate a multiple from
+        memory.
 
         Args:
             ticker: Stock ticker — one of NVDA, MSFT, AAPL, GOOGL, ETN.
         """
         ticker = ticker.upper()
+        tool_input = {"ticker": ticker}
         if ticker not in UNIVERSE:
             result = {"error": f"unknown ticker {ticker}, must be one of {UNIVERSE}"}
-        else:
-            result = _get_valuation(ticker) or {"error": f"no valuation data for {ticker}"}
-        record("get_valuation", {"ticker": ticker}, result)
-        return _dump(result)
+            record("get_valuation", tool_input, result)
+            return _dump(result)
+
+        def _fetch():
+            return _get_valuation(ticker) or {"error": f"no valuation data for {ticker}"}
+
+        return _safe("get_valuation", tool_input, _fetch)
 
     @beta_tool
     def get_capex_context(ticker: str) -> str:
@@ -111,13 +145,12 @@ def build_tools(trace: list) -> list:
             ticker: Stock ticker — one of NVDA, MSFT, AAPL, GOOGL, ETN.
         """
         ticker = ticker.upper()
-        result = (
-            {"error": f"unknown ticker {ticker}, must be one of {UNIVERSE}"}
-            if ticker not in UNIVERSE
-            else _get_capex_context(ticker)
-        )
-        record("get_capex_context", {"ticker": ticker}, result)
-        return _dump(result)
+        tool_input = {"ticker": ticker}
+        if ticker not in UNIVERSE:
+            result = {"error": f"unknown ticker {ticker}, must be one of {UNIVERSE}"}
+            record("get_capex_context", tool_input, result)
+            return _dump(result)
+        return _safe("get_capex_context", tool_input, _get_capex_context, ticker)
 
     @beta_tool
     def search_filings(
@@ -143,12 +176,10 @@ def build_tools(trace: list) -> list:
             fiscal_year: Optional fiscal year filter.
         """
         ticker = ticker.upper() if ticker else None
-        result = _search_filings(query, ticker=ticker, item=item, fiscal_year=fiscal_year)
-        record(
-            "search_filings",
-            {"query": query, "ticker": ticker, "item": item, "fiscal_year": fiscal_year},
-            result,
+        tool_input = {"query": query, "ticker": ticker, "item": item, "fiscal_year": fiscal_year}
+        return _safe(
+            "search_filings", tool_input, _search_filings,
+            query, ticker=ticker, item=item, fiscal_year=fiscal_year,
         )
-        return _dump(result)
 
     return [get_fundamentals, compare_companies, get_valuation, get_capex_context, search_filings]

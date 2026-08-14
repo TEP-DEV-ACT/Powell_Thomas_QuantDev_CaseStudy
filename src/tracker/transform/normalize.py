@@ -28,6 +28,8 @@ UNIT_BY_CONCEPT = {
     "operating_income": "USD",
     "capex": "USD",
     "operating_cash_flow": "USD",
+    "nonoperating_income": "USD",
+    "income_tax_expense": "USD",
     "eps_diluted": "USD/shares",
     "diluted_shares": "shares",
 }

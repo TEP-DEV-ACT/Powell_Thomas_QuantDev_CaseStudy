@@ -2,16 +2,22 @@
 from tracker.metrics.capex import capex_cycle_beta, capex_intensity
 from tracker.metrics.derived import margin_delta_bps, with_yoy, yoy_growth
 from tracker.metrics.reported import (
+    adjusted_net_income,
+    adjusted_net_income_margin,
     diluted_share_count,
+    effective_tax_rate,
+    fcf_margin,
     fcf_per_share,
     free_cash_flow,
     gross_margin,
+    net_income_margin,
     net_income_per_share,
     operating_margin,
+    other_income_adjustments,
     revenue_per_share,
     with_reported_metrics,
 )
-from tracker.metrics.valuation import price_to_sales, trailing_pe
+from tracker.metrics.valuation import fcf_yield, market_cap, price_to_sales, trailing_pe
 
 
 def test_gross_margin():
@@ -31,13 +37,97 @@ def test_free_cash_flow():
     assert free_cash_flow({"operating_cash_flow": 120, "capex": 30}) == 90
 
 
+def test_net_income_margin():
+    assert net_income_margin({"net_income": 24, "revenue": 100}) == 0.24
+
+
+def test_net_income_margin_missing_inputs():
+    assert net_income_margin({"net_income": None, "revenue": 100}) is None
+    assert net_income_margin({"net_income": 24, "revenue": 0}) is None
+
+
+def test_fcf_margin():
+    row = {"operating_cash_flow": 120, "capex": 20, "revenue": 500}
+    assert fcf_margin(row) == 100 / 500
+
+
+def test_fcf_margin_missing_inputs():
+    assert fcf_margin({"operating_cash_flow": None, "capex": 20, "revenue": 500}) is None
+    assert fcf_margin({"operating_cash_flow": 120, "capex": 20, "revenue": 0}) is None
+
+
+def test_other_income_adjustments():
+    assert other_income_adjustments({"nonoperating_income": 500}) == 500.0
+    # A loss (negative) passes through as-is, not clamped to zero.
+    assert other_income_adjustments({"nonoperating_income": -300}) == -300.0
+
+
+def test_other_income_adjustments_missing_tag_is_none_not_zero():
+    assert other_income_adjustments({"nonoperating_income": None}) is None
+    assert other_income_adjustments({}) is None
+
+
+def test_effective_tax_rate():
+    # tax=2,500 on pretax income of 7,500+2,500=10,000 -> 25% effective rate.
+    assert effective_tax_rate({"net_income": 7_500, "income_tax_expense": 2_500}) == 0.25
+
+
+def test_effective_tax_rate_missing_inputs():
+    assert effective_tax_rate({"net_income": None, "income_tax_expense": 2_500}) is None
+    assert effective_tax_rate({"net_income": 7_500, "income_tax_expense": None}) is None
+
+
+def test_effective_tax_rate_nonpositive_pretax_income_is_none():
+    # net_income + income_tax_expense <= 0 -> rate is undefined, not a
+    # divide-by-zero or a misleading negative/huge number.
+    assert effective_tax_rate({"net_income": -2_500, "income_tax_expense": 2_500}) is None
+    assert effective_tax_rate({"net_income": -3_000, "income_tax_expense": 1_000}) is None
+
+
+def test_adjusted_net_income_backs_out_a_gain_after_tax():
+    # A $500 pre-tax investment-marks gain at a 25% effective rate is worth
+    # $375 after tax; adjusted removes only that after-tax amount.
+    row = {"net_income": 7_500, "income_tax_expense": 2_500, "nonoperating_income": 500}
+    assert adjusted_net_income(row) == 7_500 - 375
+
+
+def test_adjusted_net_income_backs_out_a_loss_after_tax():
+    # A $300 pre-tax loss at a 25% effective rate is a $225 after-tax hit
+    # that suppressed net income; adjusted adds back only that amount.
+    row = {"net_income": 7_500, "income_tax_expense": 2_500, "nonoperating_income": -300}
+    assert adjusted_net_income(row) == 7_500 + 225
+
+
+def test_adjusted_net_income_missing_inputs():
+    base = {"net_income": 7_500, "income_tax_expense": 2_500, "nonoperating_income": 500}
+    assert adjusted_net_income({**base, "net_income": None}) is None
+    assert adjusted_net_income({**base, "nonoperating_income": None}) is None
+    # No income_tax_expense tag -> no effective rate -> can't tax-effect, so
+    # the whole adjustment is None rather than silently falling back to a
+    # pre-tax subtraction.
+    assert adjusted_net_income({**base, "income_tax_expense": None}) is None
+
+
+def test_adjusted_net_income_margin():
+    row = {"net_income": 7_500, "income_tax_expense": 2_500, "nonoperating_income": 500, "revenue": 100_000}
+    assert round(adjusted_net_income_margin(row), 5) == round((7_500 - 375) / 100_000, 5)
+
+
+def test_adjusted_net_income_margin_missing_inputs():
+    row = {"net_income": 7_500, "income_tax_expense": 2_500, "nonoperating_income": 500}
+    assert adjusted_net_income_margin({**row, "revenue": 0}) is None
+    assert adjusted_net_income_margin({**row, "revenue": 100_000, "net_income": None}) is None
+
+
 def test_with_reported_metrics_attaches_all_three():
     row = {"revenue": 391035, "gross_profit": 180683, "operating_income": 123216,
-           "operating_cash_flow": 118254, "capex": 9447}
+           "net_income": 93736, "operating_cash_flow": 118254, "capex": 9447}
     enriched = with_reported_metrics(row)
     assert round(enriched["gross_margin"], 4) == round(180683 / 391035, 4)
     assert round(enriched["operating_margin"], 4) == round(123216 / 391035, 4)
+    assert round(enriched["net_income_margin"], 4) == round(93736 / 391035, 4)
     assert enriched["free_cash_flow"] == 118254 - 9447
+    assert round(enriched["fcf_margin"], 4) == round((118254 - 9447) / 391035, 4)
 
 
 def test_diluted_share_count_prefers_the_reported_column():
@@ -116,6 +206,21 @@ def test_price_to_sales():
     # price=100, shares=1000 -> market cap 100,000; revenue=50,000 -> P/S = 2.0
     assert price_to_sales(100.0, 1000, 50_000) == 2.0
     assert price_to_sales(100.0, 1000, 0) is None
+
+
+def test_market_cap():
+    assert market_cap(100.0, 1000) == 100_000.0
+    assert market_cap(100.0, None) is None
+    assert market_cap(100.0, 0) is None
+    assert market_cap(None, 1000) is None
+
+
+def test_fcf_yield():
+    # fcf=5,000, market_cap=100,000 -> yield 5%
+    assert fcf_yield(5_000, 100_000) == 0.05
+    assert fcf_yield(None, 100_000) is None
+    assert fcf_yield(5_000, 0) is None
+    assert fcf_yield(5_000, None) is None
 
 
 def test_capex_intensity():

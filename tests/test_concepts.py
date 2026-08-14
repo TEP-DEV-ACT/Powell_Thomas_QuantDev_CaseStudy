@@ -92,6 +92,27 @@ def test_normalize_facts_derives_gross_profit_when_no_subtotal_reported():
     assert rows[0]["gross_profit_tag"] == "derived:revenue-CostOfRevenue"
 
 
+def test_nonoperating_income_prefers_aggregate_line_over_narrow_equity_tag():
+    # The aggregate "Other income (expense), net" line reflects the real
+    # non-operating swing; the narrower ASC 321 equity-securities note tag
+    # can materially understate it even when both are present for the same
+    # filer (see concepts.py's nonoperating_income chain comment).
+    facts = [
+        _fact("EquitySecuritiesFvNiUnrealizedGainLoss", "USD", 2024, 1_907, "2025-01-01"),
+        _fact("NonoperatingIncomeExpense", "USD", 2024, 29_787, "2025-01-01"),
+    ]
+    tag, fact = resolve_concept_for_fy(facts, "nonoperating_income", 2024)
+    assert tag == "NonoperatingIncomeExpense"
+    assert fact["value"] == 29_787
+
+
+def test_nonoperating_income_falls_back_to_narrow_tag_when_aggregate_absent():
+    facts = [_fact("EquitySecuritiesFvNiUnrealizedGainLoss", "USD", 2024, 1_907, "2025-01-01")]
+    tag, fact = resolve_concept_for_fy(facts, "nonoperating_income", 2024)
+    assert tag == "EquitySecuritiesFvNiUnrealizedGainLoss"
+    assert fact["value"] == 1_907
+
+
 def test_normalize_facts_prefers_reported_gross_profit_over_derived():
     facts = [
         _fact("Revenues", "USD", 2024, 350018, "2025-01-01"),

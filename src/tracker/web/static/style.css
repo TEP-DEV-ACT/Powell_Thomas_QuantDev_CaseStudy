@@ -560,6 +560,13 @@ table.fundamentals th:first-child, table.fundamentals td:first-child {
 
 table.fundamentals th { color: var(--text-muted); font-weight: 500; }
 
+table.fundamentals tr.metrics-divider td {
+  padding: 8px;
+  border-bottom: 2px solid var(--text-secondary);
+  text-align: left;
+  color: var(--text-secondary);
+}
+
 .delta-up { color: var(--delta-good); }
 .delta-down { color: var(--delta-bad); }
 .swing-flag { cursor: help; }

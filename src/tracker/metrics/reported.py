@@ -5,9 +5,9 @@ query layer that hands these functions their input.
 
 Cross-company comparison uses margins/yield (net_income_margin, fcf_margin,
 fcf_yield, gross_margin, operating_margin), not per-share figures — EDGAR
-does not retroactively re-tag diluted share counts for stock splits
-(GOOGL 20:1 in 2022, NVDA 10:1 in FY2025, AAPL 4:1 in 2020), so a per-share
-series steps sharply at each split year, while margins are immune.
+does not retroactively re-tag diluted share counts for stock splits, so a
+per-share series steps sharply at each split year for a company that has
+one, while margins are immune.
 """
 
 
@@ -102,20 +102,20 @@ def adjusted_net_income(row: dict) -> float | None:
 def diluted_share_count(row: dict) -> float | None:
     """Diluted shares for the fiscal year, falling back to net_income / EPS.
 
-    GOOGL only tags WeightedAverageNumberOfDilutedSharesOutstanding from
-    FY2024 onwards, so the stored column is null for FY2015-2023 and it would
-    otherwise drop out of every per-share comparison for those years. Where
-    both are present the implied count agrees to within ~0.05% (GOOGL FY2024:
-    12,452.5M implied vs 12,447M reported), so it is a safe stand-in.
+    Some filers only started tagging WeightedAverageNumberOfDilutedSharesOutstanding
+    in a recent fiscal year, so the stored column is null for their earlier
+    years and it would otherwise drop out of every per-share comparison for
+    those years. Where both are present the implied count typically agrees
+    with the reported count to within a fraction of a percent, so it is a
+    safe stand-in.
 
     That same net_income/EPS-implied count also guards against a known SEC
-    XBRL scaling glitch on some early-2010s filings: NVDA's FY2010
-    WeightedAverageNumberOfDilutedSharesOutstanding fact is filed as 588,684
-    instead of ~588,684,000 (confirmed against data.sec.gov's own
-    companyconcept API — this is SEC's own filed data, not an ingestion
-    bug). When the reported count and the implied count disagree by more
-    than 100x, the reported count is untrustworthy and the implied count is
-    used instead.
+    XBRL scaling glitch seen on some early-2010s filings, where a filer's
+    WeightedAverageNumberOfDilutedSharesOutstanding fact is filed off by a
+    factor of ~1000 (confirmed against data.sec.gov's own companyconcept
+    API — this is SEC's own filed data, not an ingestion bug). When the
+    reported count and the implied count disagree by more than 100x, the
+    reported count is untrustworthy and the implied count is used instead.
 
     Note these are as-reported counts — EDGAR does not retroactively re-tag
     for stock splits, so the series steps at a split just as EPS does.

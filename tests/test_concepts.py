@@ -82,7 +82,7 @@ def test_normalize_facts_leaves_missing_concepts_null():
 
 
 def test_normalize_facts_derives_gross_profit_when_no_subtotal_reported():
-    # GOOGL/ETN-style filers: no GrossProfit tag, but CostOfRevenue is present.
+    # Some filers: no GrossProfit tag, but CostOfRevenue is present.
     facts = [
         _fact("Revenues", "USD", 2024, 350018, "2025-01-01"),
         _fact("CostOfRevenue", "USD", 2024, 146306, "2025-01-01"),

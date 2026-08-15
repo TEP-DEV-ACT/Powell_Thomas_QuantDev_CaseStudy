@@ -53,9 +53,9 @@ def test_numeric_table_is_dropped_from_extracted_text():
 
 
 def test_letter_spaced_heading_still_matches():
-    # Some filers (observed on MSFT) render a heading as adjacent
-    # single-letter/short spans for kerning, e.g. "RIS" + "K" as separate
-    # text nodes — this becomes "RIS K FACTORS" once whitespace-joined.
+    # Some filers render a heading as adjacent single-letter/short spans for
+    # kerning, e.g. "RIS" + "K" as separate text nodes — this becomes
+    # "RIS K FACTORS" once whitespace-joined.
     html = """
     <html><body>
     <p>Item 1A. Risk Factors 5 Item 1B. Unresolved Staff Comments 9</p>
@@ -71,9 +71,9 @@ def test_letter_spaced_heading_still_matches():
 
 
 def test_pointer_style_integrated_10k_follows_reference():
-    # Some filers (observed on ETN) present Item 7 as a one-line pointer to a
-    # standalone, unnumbered heading elsewhere in the document instead of
-    # directly attaching the MD&A prose to the "Item 7" heading itself.
+    # Some filers present Item 7 as a one-line pointer to a standalone,
+    # unnumbered heading elsewhere in the document instead of directly
+    # attaching the MD&A prose to the "Item 7" heading itself.
     body_text = "Revenue grew due to strong demand across all segments. " * 40
     html = f"""
     <html><body>

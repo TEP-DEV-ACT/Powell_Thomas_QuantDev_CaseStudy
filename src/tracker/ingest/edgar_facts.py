@@ -7,9 +7,9 @@ alternate tags stay queryable; transform/normalize.py picks winners later.
 A 10-K can report a *duration* concept (revenue, net income, ...) twice under
 the same tag with fy/fp/form/accn all identical: once for the real annual
 period, and again for a sub-period disclosed elsewhere in the same filing
-(e.g. Apple tags its Q4-only "selected quarterly data" footnote with the same
-RevenueFromContractWithCustomerExcludingAssessedTax concept as the full-year
-figure). Since xbrl_facts is keyed on (cik, concept, unit, fy, fp, form,
+(e.g. a filer tags its Q4-only "selected quarterly data" footnote with the
+same RevenueFromContractWithCustomerExcludingAssessedTax concept as the
+full-year figure). Since xbrl_facts is keyed on (cik, concept, unit, fy, fp, form,
 accn) — not on the fact's own period dates — these collide, and whichever one
 happened to be inserted last would silently win. Any duration fact under
 ~300 days is therefore rejected outright: this tracker is annual-only by

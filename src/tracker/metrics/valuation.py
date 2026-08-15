@@ -62,8 +62,9 @@ def get_valuation(ticker: str, conn=None) -> dict | None:
     price = float(price_row["close"])
     eps = float(fundamentals_row["eps_diluted"]) if fundamentals_row["eps_diluted"] is not None else None
     # diluted_share_count() falls back to net_income / eps when the raw
-    # column is null (e.g. GOOGL pre-FY2024), so market cap / P/S don't
-    # silently drop those company-years.
+    # column is null (some filers only tag diluted shares from a certain
+    # fiscal year onward), so market cap / P/S don't silently drop those
+    # company-years.
     shares = diluted_share_count(fundamentals_row)
     revenue = float(fundamentals_row["revenue"]) if fundamentals_row["revenue"] is not None else None
     mcap = market_cap(price, shares)

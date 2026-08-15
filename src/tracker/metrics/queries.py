@@ -66,13 +66,13 @@ def latest_common_fiscal_year(conn=None) -> int | None:
     fundamentals row — the fair, unambiguous choice for an unqualified "last
     year" / "most recent year" in a cross-company comparison.
 
-    The universe's fiscal year ends don't line up (NVDA Jan, MSFT Jun, AAPL
-    Sep, GOOGL/ETN Dec), and filers report at different times, so NVDA/MSFT
-    can already have a later fiscal_year in `fundamentals` than AAPL/GOOGL/
-    ETN. Picking the single overall MAX(fiscal_year) would silently compare
-    some companies against a year the others haven't reported yet; this
-    takes the latest year common to all five instead. Returns None if any
-    tracked ticker has no fundamentals rows at all.
+    The universe's fiscal year ends don't necessarily line up, and filers
+    report at different times, so some tickers can already have a later
+    fiscal_year in `fundamentals` than others. Picking the single overall
+    MAX(fiscal_year) would silently compare some companies against a year
+    the others haven't reported yet; this takes the latest year common to
+    every tracked ticker instead. Returns None if any tracked ticker has no
+    fundamentals rows at all.
     """
     owns_conn = conn is None
     conn = conn or get_connection()
@@ -90,6 +90,32 @@ def latest_common_fiscal_year(conn=None) -> int | None:
     if len(rows) < len(UNIVERSE):
         return None
     return min(row["max_fy"] for row in rows)
+
+
+def fiscal_year_ends(conn=None) -> dict[str, int]:
+    """Latest reported fiscal-year-end month (1-12) per ticker in UNIVERSE.
+
+    Used by the AI system prompt to explain that "last year" can mean a
+    different fiscal year per company. Derived from each ticker's most
+    recent `period_end` row instead of hardcoded, so it stays correct if
+    UNIVERSE changes — e.g. a ticker is swapped for one with a different
+    fiscal year end.
+    """
+    owns_conn = conn is None
+    conn = conn or get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT DISTINCT ON (ticker) ticker, EXTRACT(MONTH FROM period_end)::int AS month "
+                "FROM fundamentals WHERE ticker = ANY(%(tickers)s) AND period_end IS NOT NULL "
+                "ORDER BY ticker, fiscal_year DESC",
+                {"tickers": UNIVERSE},
+            )
+            rows = cur.fetchall()
+    finally:
+        if owns_conn:
+            conn.close()
+    return {row["ticker"]: row["month"] for row in rows}
 
 
 def compare_companies(metric: str, fiscal_year: int, conn=None) -> list[dict]:

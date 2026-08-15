@@ -132,7 +132,7 @@ def test_diluted_share_count_prefers_the_reported_column():
 
 
 def test_diluted_share_count_falls_back_to_net_income_over_eps():
-    # GOOGL FY2015-2023 has no WeightedAverageNumberOfDilutedSharesOutstanding tag
+    # Some filers have fiscal years with no WeightedAverageNumberOfDilutedSharesOutstanding tag.
     assert diluted_share_count({"diluted_shares": None, "net_income": 100, "eps_diluted": 0.5}) == 200
 
 
@@ -143,19 +143,21 @@ def test_diluted_share_count_missing_inputs():
 
 
 def test_diluted_share_count_rejects_a_reported_count_1000x_off_the_implied_count():
-    # NVDA FY2010's WeightedAverageNumberOfDilutedSharesOutstanding XBRL fact
-    # is filed by SEC as 588,684 instead of ~588,684,000 (confirmed against
-    # data.sec.gov's own companyconcept API — SEC's own data, not an
-    # ingestion bug). net_income / eps_diluted implies the real ~588.7M count;
-    # the ~1000x-off reported count must be rejected in favor of it.
+    # A real filer's WeightedAverageNumberOfDilutedSharesOutstanding XBRL
+    # fact was found filed by SEC as 588,684 instead of ~588,684,000
+    # (confirmed against data.sec.gov's own companyconcept API — SEC's own
+    # data, not an ingestion bug). net_income / eps_diluted implies the real
+    # ~588.7M count; the ~1000x-off reported count must be rejected in favor
+    # of it.
     row = {"diluted_shares": 588684, "net_income": 253_146_000, "eps_diluted": 0.43}
     implied = 253_146_000 / 0.43
     assert diluted_share_count(row) == implied
 
 
 def test_diluted_share_count_keeps_a_reported_count_close_to_implied():
-    # GOOGL FY2024: 12,452.5M implied vs 12,447M reported — within ~0.05%,
-    # well inside the acceptance band, so the reported column wins as usual.
+    # A real filer's fiscal year: 12,452.5M implied vs 12,447M reported —
+    # within ~0.05%, well inside the acceptance band, so the reported column
+    # wins as usual.
     row = {"diluted_shares": 12447, "net_income": 100_118, "eps_diluted": 8.04}
     assert diluted_share_count(row) == 12447
 

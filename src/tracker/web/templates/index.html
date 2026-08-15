@@ -38,14 +38,14 @@
       <div class="chat-log" id="chat-log">
         <p class="chat-empty">
           Ask about revenue, margins, cash flow, capex or what management said
-          about them. Follow-up questions keep the thread — “and for NVDA?” works.
+          about them. Follow-up questions keep the thread — “and for {{ universe[0] }}?” works.
         </p>
       </div>
       <form class="chat-form" id="qa-form">
         <!-- Short enough to fit the collapsed-rail width at two rows; the
              longer prompt lives in the empty-state copy above. -->
         <textarea id="qa-question" rows="2" autocomplete="off"
-                  placeholder="e.g. How did MSFT's revenue grow last year?"></textarea>
+                  placeholder="e.g. How did {{ universe[0] }}'s revenue grow last year?"></textarea>
         <button type="submit" id="qa-send">Ask</button>
       </form>
     </div>

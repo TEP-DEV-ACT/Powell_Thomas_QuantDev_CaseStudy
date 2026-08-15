@@ -94,8 +94,8 @@ def normalize_facts(facts: list[dict]) -> list[dict]:
             row[value_col] = fact["value"] if fact else None
             row[tag_col] = tag if fact else None
 
-        # Some filers (GOOGL, ETN) never present a GrossProfit subtotal line
-        # at all; derive it from revenue - cost_of_revenue when possible.
+        # Some filers never present a GrossProfit subtotal line at all;
+        # derive it from revenue - cost_of_revenue when possible.
         if row["gross_profit"] is None:
             _revenue_tag, revenue_fact = resolved["revenue"]
             _cost_tag, cost_fact = resolved["cost_of_revenue"]

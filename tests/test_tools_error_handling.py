@@ -7,6 +7,9 @@ import json
 
 import tracker.ai.tools as tools_module
 from tracker.ai.tools import build_tools
+from tracker.config import UNIVERSE
+
+TICKER = UNIVERSE[0]
 
 
 def _tool(name: str):
@@ -19,7 +22,7 @@ def test_get_fundamentals_tool_survives_a_backend_exception(monkeypatch):
         raise RuntimeError("connection refused")
 
     monkeypatch.setattr(tools_module, "_get_fundamentals", boom)
-    result = json.loads(_tool("get_fundamentals").func(ticker="NVDA"))
+    result = json.loads(_tool("get_fundamentals").func(ticker=TICKER))
     assert "error" in result
 
 
@@ -37,7 +40,7 @@ def test_get_valuation_tool_survives_a_backend_exception(monkeypatch):
         raise RuntimeError("connection refused")
 
     monkeypatch.setattr(tools_module, "_get_valuation", boom)
-    result = json.loads(_tool("get_valuation").func(ticker="AAPL"))
+    result = json.loads(_tool("get_valuation").func(ticker=TICKER))
     assert "error" in result
 
 
@@ -46,7 +49,7 @@ def test_get_capex_context_tool_survives_a_backend_exception(monkeypatch):
         raise RuntimeError("connection refused")
 
     monkeypatch.setattr(tools_module, "_get_capex_context", boom)
-    result = json.loads(_tool("get_capex_context").func(ticker="ETN"))
+    result = json.loads(_tool("get_capex_context").func(ticker=TICKER))
     assert "error" in result
 
 
@@ -66,7 +69,7 @@ def test_trace_still_records_the_failed_call(monkeypatch):
     monkeypatch.setattr(tools_module, "_get_fundamentals", boom)
     trace: list = []
     tool = {t.name: t for t in build_tools(trace)}["get_fundamentals"]
-    tool.func(ticker="NVDA")
+    tool.func(ticker=TICKER)
     assert len(trace) == 1
     assert trace[0]["tool"] == "get_fundamentals"
     assert "error" in trace[0]["result"]
@@ -77,5 +80,5 @@ def test_a_known_no_data_result_is_not_treated_as_a_crash(monkeypatch):
     # an exception, and should surface as a normal {"error": ...} result,
     # not the generic "internal data error" message from the except branch.
     monkeypatch.setattr(tools_module, "_get_valuation", lambda ticker: None)
-    result = json.loads(_tool("get_valuation").func(ticker="NVDA"))
-    assert result == {"error": "no valuation data for NVDA"}
+    result = json.loads(_tool("get_valuation").func(ticker=TICKER))
+    assert result == {"error": f"no valuation data for {TICKER}"}

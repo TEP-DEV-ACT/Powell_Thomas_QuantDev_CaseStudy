@@ -10,7 +10,7 @@ import anthropic
 from tracker.ai.prompts import build_system_prompt
 from tracker.ai.tools import build_tools
 from tracker.config import ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, ANTHROPIC_MODEL
-from tracker.metrics.queries import latest_common_fiscal_year
+from tracker.metrics.queries import fiscal_year_ends, latest_common_fiscal_year
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ def ask(question: str, history: list[dict] | None = None) -> dict:
     """Answer `question`, optionally in the context of prior turns.
 
     `history` is the plain-text transcript so far — alternating user/assistant
-    messages — so follow-ups ("and for NVDA?") resolve. Only the final text of
+    messages — so follow-ups ("and for the other one?") resolve. Only the final text of
     each past turn is replayed, not its tool calls: re-sending the tool blocks
     would cost a lot of tokens to tell the model things it can just look up
     again, and `trace` stays scoped to the turn the caller is asking about.
@@ -59,7 +59,16 @@ def ask(question: str, history: list[dict] | None = None) -> dict:
     except Exception:
         logger.exception("AI chat: could not resolve latest_common_fiscal_year, omitting from prompt")
         common_fy = None
-    system_prompt = build_system_prompt(today=date.today().isoformat(), latest_common_fiscal_year=common_fy)
+    try:
+        fye_months = fiscal_year_ends()
+    except Exception:
+        logger.exception("AI chat: could not resolve fiscal_year_ends, omitting from prompt")
+        fye_months = {}
+    system_prompt = build_system_prompt(
+        today=date.today().isoformat(),
+        latest_common_fiscal_year=common_fy,
+        fiscal_year_end_months=fye_months,
+    )
     # Individual tool failures are already caught and turned into structured
     # {"error": ...} results inside build_tools (ai/tools.py) so a single bad
     # DB read doesn't abort the turn. What's caught here is everything

@@ -2,7 +2,7 @@
 ordered series of reported rows.
 """
 
-YOY_FIELDS = ["revenue", "net_income", "eps_diluted", "free_cash_flow", "adjusted_net_income"]
+YOY_FIELDS = ["revenue", "net_income", "eps_diluted", "free_cash_flow", "adjusted_net_income", "capex"]
 MARGIN_FIELDS = ["gross_margin", "operating_margin", "net_income_margin", "fcf_margin", "adjusted_net_income_margin"]
 
 

@@ -28,7 +28,7 @@ CONCEPT_CHAINS = {
     ],
     # Not a fundamentals column on its own — used only to derive gross_profit
     # (revenue - cost_of_revenue) when a company's income statement has no
-    # GrossProfit subtotal line at all (e.g. GOOGL, ETN).
+    # GrossProfit subtotal line at all.
     "cost_of_revenue": [
         "CostOfRevenue",
         "CostOfGoodsAndServicesSold",
@@ -52,12 +52,14 @@ CONCEPT_CHAINS = {
     # for filers that use that tag instead) over the narrower ASC 321
     # mark-to-market note tag EquitySecuritiesFvNiUnrealizedGainLoss. The
     # narrow tag looked more "precise" on paper but materially understates
-    # the real swing for the two companies that report it: GOOGL FY2025 shows
-    # $1.9bn on the narrow tag vs. $29.8bn on the aggregate line (the real
-    # driver of that year's net income), and MSFT FY2025 shows +$536M vs.
-    # the aggregate -$4.9bn (MSFT's real OpenAI equity-method-investment
-    # losses). The aggregate line is what actually matches each company's
-    # reported story, so it wins even when the narrow tag is also present.
+    # the real swing for the tracked companies that report it: one company's
+    # most recent fiscal year shows a multi-billion-dollar gap between the
+    # narrow tag and the aggregate line (the real driver of that year's net
+    # income), and another's aggregate line flips sign entirely versus the
+    # narrow tag (driven by a real equity-method-investment swing not
+    # captured by the narrow tag). The aggregate line is what actually
+    # matches each company's reported story, so it wins even when the narrow
+    # tag is also present.
     # The tradeoff is that the aggregate line also bundles in interest
     # income/expense for filers that don't tag it separately, so it isn't a
     # pure investment-marks isolate — a real precision gap, documented in

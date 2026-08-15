@@ -2,26 +2,26 @@
 chunk them for full-text search, and store into filing_sections/filing_chunks.
 
 Two real-world messiness problems this guards against (found by spot-checking
-NVDA/AAPL/GOOGL/MSFT/ETN filings against this parser):
+the tracked companies' filings against this parser):
 
 1. Table-of-contents false positives, and inline back-references to "Item 1A"
    inside the risk-factor prose itself, both produce spurious regex matches.
-   Instead of trusting "the last match" (which breaks on ETN's own
+   Instead of trusting "the last match" (which breaks on a filer's own
    self-referencing cybersecurity risk factor), every candidate start/end
    pairing is scored by resulting section length and the longest wins — real
    section headings bound a large span; TOC entries and cross-references
    bound a tiny one.
-2. Some filers (MSFT) render heading text as adjacent single-letter/short
-   spans for kerning ("RIS" + "K" as separate text nodes), which breaks a
+2. Some filers render heading text as adjacent single-letter/short spans for
+   kerning ("RIS" + "K" as separate text nodes), which breaks a
    whitespace-tolerant regex. Matching is done against a fully whitespace-
    stripped copy of the text with a position index back to the original, so
    spacing artifacts can't split a heading word apart.
-3. Some filers (ETN) use an "integrated" 10-K where Item 7 is a one-line
-   pointer ("Information required by this Item is presented in
-   'Management's Discussion and Analysis...' of this Form 10-K") to a
-   standalone, unnumbered heading elsewhere in the document. When the direct
-   Item-N heading match fails to produce a real section, we extract the
-   quoted target title from the pointer sentence and locate that heading's
+3. Some filers use an "integrated" 10-K where Item 7 is a one-line pointer
+   ("Information required by this Item is presented in 'Management's
+   Discussion and Analysis...' of this Form 10-K") to a standalone,
+   unnumbered heading elsewhere in the document. When the direct Item-N
+   heading match fails to produce a real section, we extract the quoted
+   target title from the pointer sentence and locate that heading's
    standalone occurrence instead.
 """
 import logging

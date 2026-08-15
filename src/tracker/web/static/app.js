@@ -95,22 +95,17 @@ function deltaSpan(v, decimals = 1, isBps = false, swingThreshold = 1.0) {
 // which keeps raw numbers (scaled to the unit named in the label) and lets
 // Excel do the formatting — a sheet full of "365,817 ▲ 7.8%" strings can't be
 // charted or summed.
-const FUNDAMENTAL_METRICS = [
+// Required metrics come first (the case study's specified set); additional
+// metrics we chose to add on top of that follow below a bold divider row in
+// the rendered table (see renderFundamentalsTable) so a reader can tell at a
+// glance which numbers were asked for and which are extra analytical value.
+const REQUIRED_FUNDAMENTAL_METRICS = [
   { key: "revenue", label: "Revenue ($M)", fmt: fmtMillions, yoyKey: "revenue_yoy",
     xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "Revenue YoY", yoyFmt: "0.0%",
     tip: "As-reported annual revenue from the 10-K, taken from whichever XBRL revenue tag the company uses (RevenueFromContractWithCustomerExcludingAssessedTax, Revenues, or a similar fallback)." },
   { key: "net_income", label: "Net income ($M)", fmt: fmtMillions, yoyKey: "net_income_yoy",
     xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "Net income YoY", yoyFmt: "0.0%",
     tip: "As-reported GAAP net income for the fiscal year, from the NetIncomeLoss (or ProfitLoss) XBRL tag." },
-  // No YoY on this row — it's the adjustment itself (an as-reported non-
-  // operating swing), not a metric that's meaningful to grow/shrink YoY.
-  { key: "other_income_adjustments", label: "Other income adjustments ($M)", fmt: fmtMillions,
-    yoyKey: null, xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "", yoyFmt: "",
-    tip: "The pre-tax 'Other income (expense), net' line from the income statement, which can bundle equity-investment gains/losses with interest income/expense — this is what Adjusted net income backs out below." },
-  { key: "adjusted_net_income", label: "Adjusted net income ($M)", fmt: fmtMillions,
-    yoyKey: "adjusted_net_income_yoy",
-    xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "Adjusted net income YoY", yoyFmt: "0.0%",
-    tip: "Net income with Other income adjustments backed out at the company's own effective tax rate for the year (income tax expense divided by pretax income), so a one-off investment gain or loss doesn't read as a change in operating performance." },
   { key: "eps_diluted", label: "Diluted EPS", fmt: v => v == null ? "—" : Number(v).toFixed(2),
     yoyKey: "eps_diluted_yoy", swingThreshold: 0.5,
     xlsScale: 1, xlsFmt: "0.00", yoyLabel: "Diluted EPS YoY", yoyFmt: "0.0%",
@@ -127,6 +122,23 @@ const FUNDAMENTAL_METRICS = [
     xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "Free cash flow YoY", yoyFmt: "0.0%",
     tip: "Cash from operating activities minus capital expenditure, both taken directly from the reported cash flow statement." },
 ];
+
+const ADDITIONAL_FUNDAMENTAL_METRICS = [
+  // No YoY on this row — it's the adjustment itself (an as-reported non-
+  // operating swing), not a metric that's meaningful to grow/shrink YoY.
+  { key: "other_income_adjustments", label: "Other income adjustments ($M)", fmt: fmtMillions,
+    yoyKey: null, xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "", yoyFmt: "",
+    tip: "The pre-tax 'Other income (expense), net' line from the income statement, which can bundle equity-investment gains/losses with interest income/expense — this is what Adjusted net income backs out below." },
+  { key: "adjusted_net_income", label: "Adjusted net income ($M)", fmt: fmtMillions,
+    yoyKey: "adjusted_net_income_yoy",
+    xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "Adjusted net income YoY", yoyFmt: "0.0%",
+    tip: "Net income with Other income adjustments backed out at the company's own effective tax rate for the year (income tax expense divided by pretax income), so a one-off investment gain or loss doesn't read as a change in operating performance." },
+  { key: "capex", label: "Capex ($M)", fmt: fmtMillions, yoyKey: "capex_yoy",
+    xlsScale: 1e-6, xlsFmt: "#,##0", yoyLabel: "Capex YoY", yoyFmt: "0.0%",
+    tip: "Capital expenditure for the fiscal year — cash paid to acquire property, plant and equipment, from the reported cash flow statement (PaymentsToAcquirePropertyPlantAndEquipment or a similar fallback tag). Also the input behind the Capex Cycle cards below." },
+];
+
+const FUNDAMENTAL_METRICS = [...REQUIRED_FUNDAMENTAL_METRICS, ...ADDITIONAL_FUNDAMENTAL_METRICS];
 
 // Populated by every card's render function (table and chart alike) with the
 // same { sheetName, aoa, rowFormats|colFormats } shape; read by the
@@ -146,7 +158,16 @@ function renderFundamentalsTable(rows) {
   const rowFormats = [null];
   const periodRow = ["Period end", ...recent.map(r => r.period_end ?? null)];
 
+  const colSpan = recent.length + 1;
   for (const m of FUNDAMENTAL_METRICS) {
+    // A bolded divider marks the boundary between the case study's required
+    // metrics (above) and the additional metrics we chose to report (below),
+    // so a reader can tell at a glance which numbers were asked for.
+    if (m === ADDITIONAL_FUNDAMENTAL_METRICS[0]) {
+      html += `<tr class="metrics-divider"><td colspan="${colSpan}"><strong>Additional metrics</strong></td></tr>`;
+      aoa.push(["Additional metrics"]);
+      rowFormats.push(null);
+    }
     html += `<tr><td>${m.label} <span class="info-icon" title="${m.tip}">ⓘ</span></td>`;
     const values = [];
     const deltas = [];
@@ -240,8 +261,8 @@ function renderPriceChart(ticker, prices, fundamentals) {
 }
 
 function renderCapexIntensityChart(series) {
-  // Gaps in the underlying capex tag (see DESIGN.md known limitations, e.g.
-  // NVDA FY2012-2023) are dropped rather than drawn as zero-height bars.
+  // Gaps in the underlying capex tag (see DESIGN.md known limitations) are
+  // dropped rather than drawn as zero-height bars.
   const present = series.filter(s => s.capex_intensity != null);
   CARD_EXPORTS["capex-intensity"] = {
     sheetName: "Capex intensity",
@@ -853,12 +874,10 @@ function initChatCollapse() {
   document.getElementById("chat-expand").addEventListener("click", () => setChatCollapsed(false));
 }
 
-// Restores the exact markup initChat's HTML starts with, so "Clear chat" and
-// a fresh page load leave the rail in an identical state.
-const CHAT_EMPTY_HTML = `<p class="chat-empty">
-          Ask about revenue, margins, cash flow, capex or what management said
-          about them. Follow-up questions keep the thread — “and for NVDA?” works.
-        </p>`;
+// Captured from the server-rendered DOM (its copy names a real ticker from
+// the configured universe) rather than duplicated as a literal here, so
+// "Clear chat" and a fresh page load stay identical without hardcoding one.
+const CHAT_EMPTY_HTML = document.getElementById("chat-log").innerHTML;
 
 function clearChat() {
   chatHistory.length = 0;

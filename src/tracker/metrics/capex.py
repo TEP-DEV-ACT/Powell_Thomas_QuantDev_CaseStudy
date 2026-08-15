@@ -11,8 +11,8 @@ than the economy around it; <1 means it's lagging or countercyclical.
 Known limitation: FRED series are calendar-quarter SAAR observations, so the
 macro side is aggregated by calendar year and compared against each
 company's fiscal year regardless of fiscal-year-end month (see PLAN.md's
-fiscal-year-misalignment note) — a real but small distortion for NVDA (Jan
-FYE) and MSFT (Jun FYE).
+fiscal-year-misalignment note) — a real but small distortion for any tracked
+company whose fiscal year doesn't end in December.
 """
 from tracker.config import FRED_SERIES
 from tracker.db.session import get_connection

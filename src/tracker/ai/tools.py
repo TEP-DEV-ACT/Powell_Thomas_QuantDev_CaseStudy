@@ -9,6 +9,7 @@ from typing import Optional
 
 from anthropic import beta_tool
 
+from tracker.ai.prompts import format_ticker_list
 from tracker.ai.search import search_filings as _search_filings
 from tracker.config import UNIVERSE
 from tracker.metrics.capex import get_capex_context as _get_capex_context
@@ -24,8 +25,16 @@ def _dump(obj) -> str:
 
 
 def build_tools(trace: list) -> list:
-    """Returns the 5 @beta_tool-decorated functions, each appending its call
-    and result to `trace` as a side effect before answering the model."""
+    """Returns the 5 tool-use functions, each appending its call and result
+    to `trace` as a side effect before answering the model. Ticker-bearing
+    docstrings below hold a {TICKERS} placeholder rather than a literal list
+    so the tool descriptions the model sees always match UNIVERSE — filled
+    in and wrapped with beta_tool() at the bottom of this function instead
+    of via @beta_tool decorators, since that decorator reads __doc__ at
+    definition time."""
+
+    ticker_list = format_ticker_list(UNIVERSE)
+    ticker_line = f"one of {ticker_list}"
 
     def record(name: str, tool_input: dict, result) -> None:
         logger.info("AI tool call: %s input=%s", name, tool_input)
@@ -45,7 +54,6 @@ def build_tools(trace: list) -> list:
         record(name, tool_input, result)
         return _dump(result)
 
-    @beta_tool
     def get_fundamentals(ticker: str, years: int = 5) -> str:
         """Reported and derived annual fundamentals for one company: revenue,
         net income, diluted EPS, gross margin, operating margin, net income
@@ -66,7 +74,7 @@ def build_tools(trace: list) -> list:
         reported numbers or growth over time.
 
         Args:
-            ticker: Stock ticker — one of NVDA, MSFT, AAPL, GOOGL, ETN.
+            ticker: Stock ticker — {TICKERS}.
             years: How many of the most recent fiscal years to return.
         """
         ticker = ticker.upper()
@@ -77,11 +85,11 @@ def build_tools(trace: list) -> list:
             return _dump(result)
         return _safe("get_fundamentals", tool_input, _get_fundamentals, ticker, years=years)
 
-    @beta_tool
     def compare_companies(metric: str, fiscal_year: int) -> str:
-        """Rank all 5 tracked companies on one reported/derived metric for a
-        single fiscal year, highest to lowest. Use this for "which company
-        had the highest/lowest X" or any cross-company comparison.
+        """Rank all tracked companies ({TICKER_LIST}) on one reported/derived
+        metric for a single fiscal year, highest to lowest. Use this for
+        "which company had the highest/lowest X" or any cross-company
+        comparison.
 
         Prefer the margin/yield metrics for cross-company questions — the
         absolute dollar metrics mostly just rank the companies by size.
@@ -100,7 +108,6 @@ def build_tools(trace: list) -> list:
         tool_input = {"metric": metric, "fiscal_year": fiscal_year}
         return _safe("compare_companies", tool_input, _compare_companies, metric, fiscal_year)
 
-    @beta_tool
     def get_valuation(ticker: str) -> str:
         """Trailing P/E, trailing P/S, market cap, and FCF yield for one
         company: the latest market close joined against the most recently
@@ -111,7 +118,7 @@ def build_tools(trace: list) -> list:
         memory.
 
         Args:
-            ticker: Stock ticker — one of NVDA, MSFT, AAPL, GOOGL, ETN.
+            ticker: Stock ticker — {TICKERS}.
         """
         ticker = ticker.upper()
         tool_input = {"ticker": ticker}
@@ -125,7 +132,6 @@ def build_tools(trace: list) -> list:
 
         return _safe("get_valuation", tool_input, _fetch)
 
-    @beta_tool
     def get_capex_context(ticker: str) -> str:
         """A company's capex intensity (capex / revenue) by fiscal year,
         alongside the national capex cycle (FRED Private Nonresidential
@@ -135,7 +141,7 @@ def build_tools(trace: list) -> list:
         investment pace compares to the broader economy.
 
         Args:
-            ticker: Stock ticker — one of NVDA, MSFT, AAPL, GOOGL, ETN.
+            ticker: Stock ticker — {TICKERS}.
         """
         ticker = ticker.upper()
         tool_input = {"ticker": ticker}
@@ -145,7 +151,6 @@ def build_tools(trace: list) -> list:
             return _dump(result)
         return _safe("get_capex_context", tool_input, _get_capex_context, ticker)
 
-    @beta_tool
     def search_filings(
         query: str,
         ticker: Optional[str] = None,
@@ -164,7 +169,7 @@ def build_tools(trace: list) -> list:
 
         Args:
             query: Free-text search query.
-            ticker: Optional ticker filter — one of NVDA, MSFT, AAPL, GOOGL, ETN.
+            ticker: Optional ticker filter — {TICKERS}.
             item: Optional filing item filter — '1A' (Risk Factors) or '7' (MD&A).
             fiscal_year: Optional fiscal year filter.
         """
@@ -175,4 +180,7 @@ def build_tools(trace: list) -> list:
             query, ticker=ticker, item=item, fiscal_year=fiscal_year,
         )
 
-    return [get_fundamentals, compare_companies, get_valuation, get_capex_context, search_filings]
+    raw_tools = [get_fundamentals, compare_companies, get_valuation, get_capex_context, search_filings]
+    for fn in raw_tools:
+        fn.__doc__ = fn.__doc__.replace("{TICKERS}", ticker_line).replace("{TICKER_LIST}", ticker_list)
+    return [beta_tool(fn) for fn in raw_tools]

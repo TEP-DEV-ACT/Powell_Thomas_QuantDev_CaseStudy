@@ -1,6 +1,7 @@
 """Endpoint smoke tests against the (seeded) database — no network calls."""
 import pytest
 
+from tracker.config import UNIVERSE
 from tracker.web import routes_api
 from tracker.web.app import create_app
 
@@ -23,11 +24,11 @@ def test_companies_endpoint(client):
     resp = client.get("/api/companies")
     assert resp.status_code == 200
     tickers = {row["ticker"] for row in resp.get_json()}
-    assert tickers == {"NVDA", "MSFT", "AAPL", "GOOGL", "ETN"}
+    assert tickers == set(UNIVERSE)
 
 
 def test_fundamentals_endpoint(client):
-    resp = client.get("/api/fundamentals/NVDA?years=3")
+    resp = client.get(f"/api/fundamentals/{UNIVERSE[0]}?years=3")
     assert resp.status_code == 200
     rows = resp.get_json()
     assert len(rows) <= 3
@@ -86,6 +87,13 @@ def test_latest_common_fiscal_year_matches_the_minimum_of_each_tickers_max(clien
 def test_latest_common_fiscal_year_none_when_a_ticker_has_no_data():
     from tracker.metrics.queries import latest_common_fiscal_year
 
+    # One fewer row than UNIVERSE has tickers, so one tracked ticker has no
+    # fundamentals row at all.
+    rows_for_all_but_one = [
+        {"ticker": ticker, "max_fy": 2026 - i}
+        for i, ticker in enumerate(UNIVERSE[:-1])
+    ]
+
     class _FakeCursor:
         def __enter__(self):
             return self
@@ -97,13 +105,7 @@ def test_latest_common_fiscal_year_none_when_a_ticker_has_no_data():
             pass
 
         def fetchall(self):
-            # Only 4 of the 5 UNIVERSE tickers have a row.
-            return [
-                {"ticker": "NVDA", "max_fy": 2026},
-                {"ticker": "MSFT", "max_fy": 2026},
-                {"ticker": "AAPL", "max_fy": 2025},
-                {"ticker": "GOOGL", "max_fy": 2025},
-            ]
+            return rows_for_all_but_one
 
     class _FakeConn:
         def cursor(self):
@@ -116,7 +118,7 @@ def test_latest_common_fiscal_year_none_when_a_ticker_has_no_data():
 
 
 def test_valuation_endpoint(client):
-    resp = client.get("/api/valuation/AAPL")
+    resp = client.get(f"/api/valuation/{UNIVERSE[0]}")
     assert resp.status_code == 200
     body = resp.get_json()
     assert "trailing_pe" in body
@@ -126,25 +128,27 @@ def test_valuation_endpoint(client):
 
 
 def test_capex_endpoint(client):
-    resp = client.get("/api/capex/MSFT")
+    ticker = UNIVERSE[0]
+    resp = client.get(f"/api/capex/{ticker}")
     assert resp.status_code == 200
     body = resp.get_json()
-    assert body["ticker"] == "MSFT"
+    assert body["ticker"] == ticker
     assert isinstance(body["series"], list)
 
 
 def test_prices_endpoint(client):
-    resp = client.get("/api/prices/GOOGL?days=30")
+    resp = client.get(f"/api/prices/{UNIVERSE[0]}?days=30")
     assert resp.status_code == 200
     rows = resp.get_json()
     assert 0 < len(rows) <= 30
 
 
 def test_prices_csv_endpoint(client):
-    resp = client.get("/api/prices/NVDA.csv?days=5")
+    ticker = UNIVERSE[0]
+    resp = client.get(f"/api/prices/{ticker}.csv?days=5")
     assert resp.status_code == 200
     assert resp.mimetype == "text/csv"
-    assert 'attachment; filename="NVDA_price.csv"' in resp.headers["Content-Disposition"]
+    assert f'attachment; filename="{ticker}_price.csv"' in resp.headers["Content-Disposition"]
     lines = resp.data.decode().strip().splitlines()
     assert lines[0] == "trade_date,open,high,low,close,volume"
     assert 1 <= len(lines) - 1 <= 5
@@ -156,13 +160,13 @@ def test_prices_csv_endpoint_rejects_unknown_ticker(client):
 
 
 def test_prices_endpoint_json_not_shadowed_by_csv_route(client):
-    resp = client.get("/api/prices/NVDA?days=5")
+    resp = client.get(f"/api/prices/{UNIVERSE[0]}?days=5")
     assert resp.status_code == 200
     assert resp.mimetype == "application/json"
 
 
 def test_filings_endpoint(client):
-    resp = client.get("/api/filings/ETN")
+    resp = client.get(f"/api/filings/{UNIVERSE[0]}")
     assert resp.status_code == 200
     rows = resp.get_json()
     assert len(rows) >= 1
@@ -176,7 +180,7 @@ def test_fundamentals_endpoint_returns_clean_500_on_backend_failure(client, monk
         raise RuntimeError("connection refused")
 
     monkeypatch.setattr(routes_api, "get_fundamentals", boom)
-    resp = client.get("/api/fundamentals/AAPL")
+    resp = client.get(f"/api/fundamentals/{UNIVERSE[0]}")
     assert resp.status_code == 500
     assert resp.get_json() == {"error": "internal server error"}
 

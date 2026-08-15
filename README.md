@@ -4,6 +4,8 @@ A dashboard that tracks fundamentals for NVDA, MSFT, AAPL, GOOGL, and ETN from S
 10-K narrative), Yahoo Finance, and FRED, and answers natural-language questions over both the
 reported numbers and the filing text via a Claude tool-use agent.
 
+The tickers can be edited within src\tracker\config.py.
+
 See `PLAN.md` (pre-build scoping) and `DESIGN.md` (architecture writeup, cross-source join,
 metric rationale, tradeoffs, cuts) for the full picture. This file is the run-it doc.
 
@@ -72,6 +74,12 @@ EPS jump around a stock split) is additionally flagged with a "⚠" hover toolti
 shown as a plain, misleading percentage. The price card plots ~3 years of daily closes
 with dotted vertical markers at each fiscal-year-end date, so the price series lines up visually
 with the reported periods.
+
+The table also includes three derived line items — Other Income Adjustments ($M), Adjusted Net Income
+($M), and Capex ($M) — so reported net income can be compared against a version with large
+non-operating gains/losses (e.g. mark-to-market swings on strategic equity stakes) stripped out and
+tax-effected, alongside how much of revenue each company reinvests via capital expenditure. See
+`DESIGN.md` for the tag-selection and tax-treatment rationale behind the adjustment.
 
 ![Dashboard — NVDA selected, fundamentals table, price chart, and the three capex-cycle panels](docs/screenshots/dashboard-nvda.png)
 

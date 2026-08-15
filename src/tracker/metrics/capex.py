@@ -18,12 +18,7 @@ from tracker.config import FRED_SERIES
 from tracker.db.session import get_connection
 from tracker.metrics.derived import yoy_growth
 from tracker.metrics.queries import get_fundamentals
-
-
-def capex_intensity(capex: float | None, revenue: float | None) -> float | None:
-    if capex is None or not revenue:
-        return None
-    return float(capex) / float(revenue)
+from tracker.metrics.reported import capex_intensity
 
 
 def capex_cycle_beta(company_capex_yoy: float | None, macro_capex_yoy: float | None) -> float | None:

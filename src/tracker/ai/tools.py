@@ -102,7 +102,7 @@ def build_tools(trace: list) -> list:
         Args:
             metric: One of revenue, net_income, free_cash_flow, eps_diluted,
                 gross_margin, operating_margin, net_income_margin,
-                fcf_margin, fcf_yield.
+                fcf_margin, fcf_yield, capex_intensity.
             fiscal_year: The fiscal year to compare, e.g. 2024.
         """
         tool_input = {"metric": metric, "fiscal_year": fiscal_year}

@@ -4,10 +4,10 @@ capex, operating_cash_flow). No DB access here — see db_reads.py for the
 query layer that hands these functions their input.
 
 Cross-company comparison uses margins/yield (net_income_margin, fcf_margin,
-fcf_yield, gross_margin, operating_margin), not per-share figures — EDGAR
-does not retroactively re-tag diluted share counts for stock splits, so a
-per-share series steps sharply at each split year for a company that has
-one, while margins are immune.
+fcf_yield, gross_margin, operating_margin, capex_intensity), not per-share
+figures — EDGAR does not retroactively re-tag diluted share counts for stock
+splits, so a per-share series steps sharply at each split year for a company
+that has one, while margins are immune.
 """
 
 
@@ -27,6 +27,19 @@ def free_cash_flow(row: dict) -> float | None:
     if row.get("operating_cash_flow") is None or row.get("capex") is None:
         return None
     return float(row["operating_cash_flow"]) - float(row["capex"])
+
+
+def capex_intensity(capex: float | None, revenue: float | None) -> float | None:
+    """capex / revenue — how much of every revenue dollar a company plows
+    back into physical/compute capacity. Also the metric behind the
+    single-company capex-cycle cards; defined here (rather than in
+    metrics/capex.py, which imports metrics/queries.py) so metrics/queries.py
+    can pull it into with_reported_metrics() for cross-company comparison
+    without a circular import.
+    """
+    if capex is None or not revenue:
+        return None
+    return float(capex) / float(revenue)
 
 
 def net_income_margin(row: dict) -> float | None:
@@ -137,6 +150,7 @@ def with_reported_metrics(row: dict) -> dict:
         **row,
         "gross_margin": gross_margin(row),
         "operating_margin": operating_margin(row),
+        "capex_intensity": capex_intensity(row.get("capex"), row.get("revenue")),
         "net_income_margin": net_income_margin(row),
         "fcf_margin": fcf_margin(row),
         "free_cash_flow": free_cash_flow(row),
